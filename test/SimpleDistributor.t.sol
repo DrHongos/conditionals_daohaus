@@ -9,6 +9,10 @@ import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 /* import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol"; */
 import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
+// TODO
+// test the timeout
+// create deep position distributors..
+
 contract SimpleDistributorTest is Test, ERC1155Holder {
 
     address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; 
@@ -23,6 +27,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
 
     address[] public addresses;            // for balance checks
     uint[] public positions;            // subId ERC1155
+
+    uint defaultTimeOut = block.timestamp + 1 days;
 
     SimpleDistributor distributor;
     User oracle;
@@ -77,7 +83,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
 
     function createIncentivizedPrediction(
         bytes32 questionId, 
-        uint[] memory indexSets
+        uint[] memory indexSets,
+        uint timeOut
     ) internal {
 /*         collateralToken.approve(CT_gnosis, initialBalance); */
         bytes32 conditionId = prepareNewCondition(questionId1, indexSets.length);
@@ -86,7 +93,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
             rootCollateral,
             collateralToken,
             indexSets,
-            initialBalance
+            initialBalance,
+            timeOut
         );
         emit log_named_address('IO|P created', address(distributor));
     }
@@ -97,7 +105,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100       
         collateralToken.transfer(address(distributor), initialBalance);
-        createIncentivizedPrediction(questionId1, indexSets);
+        createIncentivizedPrediction(questionId1, indexSets, 0);
         assertEq(ICT(CT_gnosis).getOutcomeSlotCount(conditionsIds[questionId1]), 3);
         for (uint i=0; i < 3; i++) {
             (bytes32 condition, uint position) = getCollectionAndPosition(
@@ -115,7 +123,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100       
         collateralToken.transfer(address(distributor), initialBalance);
-        createIncentivizedPrediction(questionId1, indexSets);
+        createIncentivizedPrediction(questionId1, indexSets, 0);
         uint[] memory alicePrediction = new uint[](3);
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
@@ -126,13 +134,87 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(alicePrediction[1]*10, distributor.probabilityDistribution(address(alice), 1));    
         assertEq(alicePrediction[2]*10, distributor.probabilityDistribution(address(alice), 2));    
     }
+    function testFail_setPredictionClosed() public {
+        uint[] memory indexSets = new uint[](3);
+        indexSets[0] = uint(1); //0b001        
+        indexSets[1] = uint(2); //0b010       
+        indexSets[2] = uint(4); //0b100       
+        collateralToken.transfer(address(distributor), initialBalance);
+        createIncentivizedPrediction(questionId1, indexSets, 0);
+        uint[] memory alicePrediction = new uint[](3);
+        alicePrediction[0] = uint(2);
+        alicePrediction[1] = uint(3);
+        alicePrediction[2] = uint(5);
+        distributor.close();
+        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+    }
+
+
+    function test_updatePrediction() public {
+        uint[] memory indexSets = new uint[](3);
+        indexSets[0] = uint(1); //0b001        
+        indexSets[1] = uint(2); //0b010       
+        indexSets[2] = uint(4); //0b100       
+        collateralToken.transfer(address(distributor), initialBalance);
+        createIncentivizedPrediction(questionId1, indexSets, 0);
+        uint[] memory alicePrediction = new uint[](3);
+        alicePrediction[0] = uint(2);
+        alicePrediction[1] = uint(3);
+        alicePrediction[2] = uint(5);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        assertEq(alicePrediction[0]*10, distributor.probabilityDistribution(address(alice), 0));
+//        assertEq(distributor.probabilityDistribution(address(alice), 0), alicePrediction[0]);
+        uint[] memory newPrediction = new uint[](3);
+        newPrediction[0] = uint(5);
+        newPrediction[1] = uint(3);
+        newPrediction[2] = uint(2);
+        alice.setProbabilityDistribution(address(distributor), newPrediction);
+        assertEq(distributor.probabilityDistribution(address(alice), 0), newPrediction[0]*10);
+        assertEq(distributor.positionsSum(0), newPrediction[0]*10);
+    }
+
+    function test_addFunds() public {
+        uint[] memory indexSets = new uint[](3);
+        indexSets[0] = uint(1); //0b001        
+        indexSets[1] = uint(2); //0b010       
+        indexSets[2] = uint(4); //0b100       
+        collateralToken.transfer(address(distributor), initialBalance);
+        createIncentivizedPrediction(questionId1, indexSets, 0);
+        collateralToken.mint(address(this), initialBalance);
+        collateralToken.approve(address(distributor), initialBalance);
+        distributor.addFunds(initialBalance);
+        assertEq(distributor.totalCollateral(), 2*initialBalance);
+    }
+
+    function test_timeOut() public {
+        uint[] memory indexSets = new uint[](3);
+        indexSets[0] = uint(1); //0b001        
+        indexSets[1] = uint(2); //0b010       
+        indexSets[2] = uint(4); //0b100       
+        collateralToken.transfer(address(distributor), initialBalance);
+        createIncentivizedPrediction(questionId1, indexSets, defaultTimeOut);
+        uint[] memory alicePrediction = new uint[](3);
+        alicePrediction[0] = uint(2);
+        alicePrediction[1] = uint(3);
+        alicePrediction[2] = uint(5);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        vm.warp(defaultTimeOut+1);
+        vm.expectRevert(bytes("Time is out"));//
+        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        distributor.changeTimeOut(defaultTimeOut + 1 days);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        distributor.redemptionTime();
+        vm.expectRevert(bytes("Redemption done"));//
+        distributor.changeTimeOut(defaultTimeOut + 2 days);        
+    }
+
     function test_complete() public {
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100       
         collateralToken.transfer(address(distributor), initialBalance);
-        createIncentivizedPrediction(questionId1, indexSets);
+        createIncentivizedPrediction(questionId1, indexSets, 0);
         uint[] memory alicePrediction = new uint[](3);
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
@@ -144,7 +226,6 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         bobPrediction[1] = uint(8);
         bobPrediction[2] = uint(8);
         bob.setProbabilityDistribution(address(distributor), bobPrediction);
-
 
         uint[] memory payout = new uint[](3);
         payout[0] = 1;
@@ -168,10 +249,15 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
             conditionsIds[questionId1],
             indexSets
         );
+        assertGt(collateralToken.balanceOf(address(alice)), 0);
+        assertGt(collateralToken.balanceOf(address(bob)), 0);
         // check balances
         // it works, but i need to improve the aproximation
 /*         uint subTotal = alicePrediction[0]+bobPrediction[0];
         assertEq(collateralToken.balanceOf(address(alice)), initialBalance * alicePrediction[0] / subTotal);
         assertEq(collateralToken.balanceOf(address(bob)), initialBalance * bobPrediction[0] / subTotal); */
     }
+
+
+
 }
