@@ -21,8 +21,8 @@ contract User is DSTest, ERC1155Holder {
 
 ///////////////////////////////////////////////////////////////DISTRIBUTOR FUNCTIONS
     // setPosition (update)
-    function setProbabilityDistribution(address distributor, uint[] calldata distribution) public {
-      return SimpleDistributor(distributor).setProbabilityDistribution(distribution);
+    function setProbabilityDistribution(address distributor, uint[] calldata distribution, string calldata justification) public {
+      return SimpleDistributor(distributor).setProbabilityDistribution(distribution, justification);
     }
     // redeem
     function redeem(address distributor) public {

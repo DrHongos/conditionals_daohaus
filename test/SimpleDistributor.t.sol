@@ -10,7 +10,6 @@ import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
 // TODO
-// test the timeout
 // create deep position distributors..
 
 contract SimpleDistributorTest is Test, ERC1155Holder {
@@ -20,7 +19,9 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
     bytes32 questionId1 = 0x0000000000000000000000000000000000000000000000000000000000000001;
     bytes32 questionId2 = 0x0000000000000000000000000000000000000000000000000000000000000002;
     bytes32 questionId3 = 0x0000000000000000000000000000000000000000000000000000000000000003;
-
+    string justification1 = 'AlinkToSomewhere';
+    string justification2 =  'Newspapers, Internet, Blogs, Spreadsheets';
+    
     mapping(bytes32 => bytes32) conditionsIds;
     uint256 constant PRECISION = 1e18;
     uint initialBalance = 100 * PRECISION;
@@ -91,7 +92,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         distributor.initialize(
             conditionId,
             rootCollateral,
-            collateralToken,
+            address(collateralToken),
+            CT_gnosis,
             indexSets,
             initialBalance,
             timeOut
@@ -128,7 +130,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
         // *10 comes from a proportion given in the distributor
         assertEq(alicePrediction[0]*10, distributor.probabilityDistribution(address(alice), 0));
         assertEq(alicePrediction[1]*10, distributor.probabilityDistribution(address(alice), 1));    
@@ -146,7 +148,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
         distributor.close();
-        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
     }
 
 
@@ -161,16 +163,17 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
         assertEq(alicePrediction[0]*10, distributor.probabilityDistribution(address(alice), 0));
 //        assertEq(distributor.probabilityDistribution(address(alice), 0), alicePrediction[0]);
         uint[] memory newPrediction = new uint[](3);
         newPrediction[0] = uint(5);
         newPrediction[1] = uint(3);
         newPrediction[2] = uint(2);
-        alice.setProbabilityDistribution(address(distributor), newPrediction);
+        alice.setProbabilityDistribution(address(distributor), newPrediction, justification1);
         assertEq(distributor.probabilityDistribution(address(alice), 0), newPrediction[0]*10);
         assertEq(distributor.positionsSum(0), newPrediction[0]*10);
+        assertEq(distributor.justifiedPositions(address(alice)), justification1);
     }
 
     function test_addFunds() public {
@@ -197,12 +200,12 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
         vm.warp(defaultTimeOut+1);
         vm.expectRevert(bytes("Time is out"));//
-        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
         distributor.changeTimeOut(defaultTimeOut + 1 days);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
         distributor.redemptionTime();
         vm.expectRevert(bytes("Redemption done"));//
         distributor.changeTimeOut(defaultTimeOut + 2 days);        
@@ -219,13 +222,13 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, justification2);
 
         uint[] memory bobPrediction = new uint[](3);
         bobPrediction[0] = uint(8);
         bobPrediction[1] = uint(8);
         bobPrediction[2] = uint(8);
-        bob.setProbabilityDistribution(address(distributor), bobPrediction);
+        bob.setProbabilityDistribution(address(distributor), bobPrediction, justification1);
 
         uint[] memory payout = new uint[](3);
         payout[0] = 1;

@@ -1,0 +1,3 @@
+forge test --fork-url https://rpc.gnosischain.com
+
+since it calls CT_gnosis contract for tests

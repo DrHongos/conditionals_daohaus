@@ -5,13 +5,11 @@ import "../interfaces/ICT.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 
 // TODO:
-// add timeOut? maybe conditional?
 
-contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
+contract SimpleDistributor is Initializable, ERC1155Holder {
 
     enum Stages {
         Open,       //Accepts Positions 
@@ -19,13 +17,13 @@ contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
         Redemption  //Redeems Positions
     }
     Stages status;
+    address public ctAddress; 
     constructor() {}
-    // set it on initialization
-    address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; 
     uint decimals = 100;
     bytes32 collection;
     bytes32 conditionId;
     uint timeOut;
+    address owner;
     
     uint[] indexSets;
     IERC20 collateralToken;
@@ -33,46 +31,77 @@ contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
     mapping(uint => uint) public positionsSum;
     mapping(address => bool) public userSet;
     mapping(address => uint[]) public probabilityDistribution;
+    mapping(address => string) public justifiedPositions;
+    // exp: to leave trace of information
 
-    function initialize(
+    modifier onlyOwner() {
+        require(owner == msg.sender, "Ownable: caller is not the owner");
+        _;
+    }
+
+    event SimpleDistributorInitialized(
+        bytes32 conditionId,
+        bytes32 parentCollection,
+        address collateralToken,
+        address ctAddress,
+        uint[] indexSets,
+        uint amountToSplit,
+        uint timeOut
+    );
+    event UserSetProbability(address who, uint[] userDistribution, string justification);
+    event StatusChanged(Stages status);
+    event UserRedemption(address who, uint[] redemption);
+    event PredictionFunded(address who, uint amount);
+    event TimeOutUpdated(uint timeOut);
+    
+    function initialize(        
         bytes32 _conditionId,
         bytes32 parentCollection,
-        IERC20 _collateralToken,
+        address _collateralToken,
+        address _ctAddress,
         uint[] calldata _indexSets,
         uint _amountToSplit,
         uint _timeOut
     ) initializer public {
+        owner = msg.sender;
         totalCollateral = _amountToSplit;
-        collateralToken = _collateralToken;
-        collateralToken.approve(CT_gnosis, _amountToSplit);
+        collateralToken = IERC20(_collateralToken);
+        collateralToken.approve(_ctAddress, _amountToSplit);
         indexSets = _indexSets;
+        ctAddress = _ctAddress;
         collection = parentCollection; // bytes32(0) for collateral
         conditionId = _conditionId;
         timeOut = _timeOut;
-        ICT(CT_gnosis).splitPosition(
-            _collateralToken,
+        ICT(_ctAddress).splitPosition(
+            collateralToken,
             parentCollection,
             _conditionId,
             _indexSets,
             _amountToSplit
         );
         status = Stages.Open;
+        emit SimpleDistributorInitialized(
+            _conditionId,
+            parentCollection,
+            _collateralToken,
+            _ctAddress,
+            _indexSets,
+            _amountToSplit,
+            _timeOut
+        );
     }
 
-    event UserSetProbability(address who, uint[] userDistribution);
-    event StatusChanged(Stages status);
-    event UserRedemption(address who, uint[] redemption);
-    event PredictionFunded(address who, uint amount);
-    event TimeOutUpdated(uint timeOut);
-    
-    function setProbabilityDistribution(uint[] calldata distribution) public {
+    function setProbabilityDistribution(
+        uint[] calldata distribution,
+        string calldata justification
+    ) public {
         address sender = msg.sender;
         require(status == Stages.Open, 'This contract is blocked');
         require(distribution.length == indexSets.length, 'Wrong distribution provided');        
         if (timeOut > 0) {
             require(block.timestamp < timeOut, 'Time is out');
         }
-        //require(!userSet[sender], 'Call update function');
+        justifiedPositions[sender] = justification;
         uint sum;
         for (uint i = 0; i < indexSets.length; i++) {
             sum += distribution[i];
@@ -88,7 +117,7 @@ contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
         }
         probabilityDistribution[sender] = newPosition;
         userSet[sender] = true;
-        emit UserSetProbability(sender, newPosition);
+        emit UserSetProbability(sender, newPosition, justification);
     }
 
     function addFunds(uint amount) public {
@@ -99,8 +128,8 @@ contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
             amount
         );
         totalCollateral += amount;
-        collateralToken.approve(CT_gnosis, amount);
-        ICT(CT_gnosis).splitPosition(
+        collateralToken.approve(ctAddress, amount);
+        ICT(ctAddress).splitPosition(
             collateralToken,
             collection,
             conditionId,
@@ -125,6 +154,7 @@ contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
     }    
     function changeTimeOut(uint _timeOut) public onlyOwner {
         require(status != Stages.Redemption, 'Redemption done');
+        require(_timeOut > timeOut, 'Wrong value');
         timeOut = _timeOut;
         emit TimeOutUpdated(_timeOut);
     }
@@ -137,20 +167,20 @@ contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
         uint[] memory positionIds = new uint[](indexSets.length);
         userSet[sender] = false;
         for (uint i=0; i < indexSets.length; i++) {
-            bytes32 collectionId = ICT(CT_gnosis).getCollectionId(
+            bytes32 collectionId = ICT(ctAddress).getCollectionId(
                 collection,
                 conditionId,
                 indexSets[i]
             );
-            uint positionId = ICT(CT_gnosis).getPositionId(
+            uint positionId = ICT(ctAddress).getPositionId(
                 address(collateralToken),
                 collectionId
             );
             positionIds[i] = positionId;
-            uint tokenBalance = ICT(CT_gnosis).balanceOf(address(this), positionId);
+            uint tokenBalance = ICT(ctAddress).balanceOf(address(this), positionId);
             returnedTokens[i] = totalCollateral * userPosition[i] / (positionsSum[i]); // * decimals            
         }
-        IERC1155(CT_gnosis).safeBatchTransferFrom(
+        IERC1155(ctAddress).safeBatchTransferFrom(
             address(this),
             sender,
             positionIds,
@@ -158,7 +188,6 @@ contract SimpleDistributor is Ownable, Initializable, ERC1155Holder {
             '0x'
         );
         emit UserRedemption(sender, returnedTokens);
-    }    
-
+    }
 }
 
