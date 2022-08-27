@@ -1,3 +1,29 @@
 forge test --fork-url https://rpc.gnosischain.com
 
 since it calls CT_gnosis contract for tests
+
+NOTICE: decimals as a constant in the template is NOT replicated in clones.
+
+init conditions:
+conditionId: 0x4150c4c0eb3864b99dd6e9e406760fc00c7b3eec2b29e7996b2265d1a539aa55
+parentCollection: 0x0000000000000000000000000000000000000000000000000000000000000000
+collateralToken: 0xe91d153e0b41518a2ce8dd3d7944fa863463a97d (wxdai)
+ctAddress: 0xceafdd6bc0bef976fdcd1112955828e00543c0ce (gnosis chain)
+indexSet: 1,2,4
+amountToSplit: 1000000000000 (0.001)
+timeOut: 1672444800 (31/12/2022)
+
+// changes to consider
+// contract
+    make indexSet.length publicly fetchable
+    // or maybe return all positionsSum in a vector? like currentDistribution() public view returns (uint[] memory) {}
+
+// frontend
+    fetch number of outcomes from the contract (maybe in the same call of global values)
+
+// subgraph
+    setProbabilityDistribution event >  user's first opinion about it    
+need to get list of positions timestamped:         
+    new user attributo (to get a lineal plot) number of users vs time
+    total sum of each outcome (to get a stacked area graph) probability (normalized) vs time
+    PROBLEM: a user change of opinion has no link with previous values, how can i substract those values from positionsSum?

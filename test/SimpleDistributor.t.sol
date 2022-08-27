@@ -130,7 +130,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, 'A long string to test storage issues');
         // *10 comes from a proportion given in the distributor
         assertEq(alicePrediction[0]*10, distributor.probabilityDistribution(address(alice), 0));
         assertEq(alicePrediction[1]*10, distributor.probabilityDistribution(address(alice), 1));    
@@ -237,6 +237,12 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         oracle.reportPayouts(CT_gnosis, questionId1, payout);
         distributor.redemptionTime();
 
+        uint[] memory globalPredictions = new uint[](3);
+        globalPredictions[0] = uint(53);
+        globalPredictions[1] = uint(63);
+        globalPredictions[2] = uint(83);
+        assertEq(distributor.getProbabilityDistribution(), globalPredictions);
+        
         alice.redeem(address(distributor));
         bob.redeem(address(distributor));
 
@@ -254,6 +260,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         );
         assertGt(collateralToken.balanceOf(address(alice)), 0);
         assertGt(collateralToken.balanceOf(address(bob)), 0);
+        
         // check balances
         // it works, but i need to improve the aproximation
 /*         uint subTotal = alicePrediction[0]+bobPrediction[0];

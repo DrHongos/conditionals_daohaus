@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.2;
 
 import "../interfaces/ICT.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
-
-// TODO:
 
 contract SimpleDistributor is Initializable, ERC1155Holder {
 
@@ -16,23 +14,20 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
         Closed,     //Rejects Positions         
         Redemption  //Redeems Positions
     }
-    Stages status;
-    address public ctAddress; 
-    constructor() {}
-    uint decimals = 100;
-    bytes32 collection;
-    bytes32 conditionId;
-    uint timeOut;
-    address owner;
+    Stages public status;
+    address ctAddress;
+    bytes32 public collection;
+    bytes32 public conditionId;
+    uint public timeOut;
+    address public owner;
     
-    uint[] indexSets;
+    uint[] public indexSets;
     IERC20 collateralToken;
     uint public totalCollateral;
     mapping(uint => uint) public positionsSum;
     mapping(address => bool) public userSet;
     mapping(address => uint[]) public probabilityDistribution;
     mapping(address => string) public justifiedPositions;
-    // exp: to leave trace of information
 
     modifier onlyOwner() {
         require(owner == msg.sender, "Ownable: caller is not the owner");
@@ -54,6 +49,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
     event PredictionFunded(address who, uint amount);
     event TimeOutUpdated(uint timeOut);
     
+    constructor() {}
     function initialize(        
         bytes32 _conditionId,
         bytes32 parentCollection,
@@ -96,19 +92,21 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
         string calldata justification
     ) public {
         address sender = msg.sender;
+        uint len = indexSets.length;
         require(status == Stages.Open, 'This contract is blocked');
-        require(distribution.length == indexSets.length, 'Wrong distribution provided');        
+        require(distribution.length == len, 'Wrong distribution provided');        
         if (timeOut > 0) {
             require(block.timestamp < timeOut, 'Time is out');
         }
         justifiedPositions[sender] = justification;
         uint sum;
-        for (uint i = 0; i < indexSets.length; i++) {
+        for (uint i = 0; i < len; i++) {
             sum += distribution[i];
         }
-        uint[] memory newPosition = new uint[](indexSets.length);                
-        for (uint i = 0; i < indexSets.length; i++) {
-            uint value = distribution[i] * decimals / sum;
+        require(sum > 0, "At least one value");
+        uint[] memory newPosition = new uint[](len);                
+        for (uint i = 0; i < len; i++) {
+            uint value = distribution[i] * 100 / sum;
             newPosition[i] = value;
             positionsSum[i] += value;            
             if (userSet[sender]) {
@@ -177,7 +175,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
                 collectionId
             );
             positionIds[i] = positionId;
-            uint tokenBalance = ICT(ctAddress).balanceOf(address(this), positionId);
+            //uint tokenBalance = ICT(ctAddress).balanceOf(address(this), positionId);
             returnedTokens[i] = totalCollateral * userPosition[i] / (positionsSum[i]); // * decimals            
         }
         IERC1155(ctAddress).safeBatchTransferFrom(
@@ -189,5 +187,15 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
         );
         emit UserRedemption(sender, returnedTokens);
     }
+
+    function getProbabilityDistribution() public view returns (uint[] memory) {
+        uint size = indexSets.length;
+        uint[] memory current = new uint[](size);
+        for (uint i = 0; i < size; i++) {
+            current[i] = positionsSum[i];
+        }
+        return current;
+    }
+
 }
 
