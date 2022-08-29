@@ -12,20 +12,31 @@ interface ISimpleDistributor {
     }
 
     function initialize(
-        bytes32 _conditionId,
-        bytes32 parentCollection,
-        IERC20 _collateralToken,
-        uint[] calldata _indexSets,
-        uint _amountToSplit,
-        uint _timeOut
+        address creator,        
+        address collateral,
+        address ct_address,        
+        uint[] calldata indexSets,        
+        uint question_index,
+        uint distributor_index        
     ) external;
-
+    function configure(
+        uint amountToSplit, 
+        uint timeOut,
+        uint price,
+        uint fee
+    ) external;
     event UserSetProbability(address who, uint[] userDistribution);
     event StatusChanged(Stages status);
     event UserRedemption(address who, uint[] redemption);
     event PredictionFunded(address who, uint amount);
     event TimeOutUpdated(uint timeOut);
     
+    function status() external view returns (uint);
+    function timeout() external view returns (uint);
+    function price() external view returns (uint);
+    function fee() external view returns (uint);
+    function userSet(address) external view returns (bool);
+    function probabilityDistribution(address) external view returns (uint[] calldata);
     function setProbabilityDistribution(uint[] calldata distribution) external;
     function addFunds(uint amount) external;
     function close() external;
@@ -33,5 +44,7 @@ interface ISimpleDistributor {
     function redemptionTime() external;
     function changeTimeOut(uint _timeOut) external;
     function redeem() external;
-
+    function hasRole(bytes32 role, address account) external view returns (bool);
+    function grantRole(bytes32 role, address account)  external;
+    function revokeRole(bytes32 role, address account)  external;
 }

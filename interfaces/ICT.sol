@@ -40,6 +40,7 @@ interface ICT {
         uint[] calldata indexSets
     ) external;
    function reportPayouts(bytes32 questionId, uint[] calldata payouts) external;
+   function payoutDenominator(bytes32) external view returns (uint);
 //-------------------- ERC1155
     function balanceOf(address account, uint256 id) external view returns (uint256);
     function balanceOfBatch(address[] calldata accounts, uint256[] calldata ids)

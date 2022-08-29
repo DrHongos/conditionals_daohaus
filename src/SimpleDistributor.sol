@@ -1,90 +1,127 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.2;
 
+// TODO ;
+// WRITE FUNCTIONS FOR
+// FEE
+// PRICE
+// 
+
 import "../interfaces/ICT.sol";
+import "../interfaces/IQuestionFactory.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-contract SimpleDistributor is Initializable, ERC1155Holder {
 
+contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
+    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
+    bytes32 rootCollateral = 0x0000000000000000000000000000000000000000000000000000000000000000; 
     enum Stages {
+        Preparing,  //Awaiting configuration
         Open,       //Accepts Positions 
         Closed,     //Rejects Positions         
         Redemption  //Redeems Positions
     }
     Stages public status;
-    address ctAddress;
-    bytes32 public collection;
-    bytes32 public conditionId;
-    uint public timeOut;
-    address public owner;
+    uint public timeout;
+    uint public price;
+    uint public fee;
     
+    uint public question_index;
+    uint public distributor_index;
+
+    address public factory;    
     uint[] public indexSets;
-    IERC20 collateralToken;
+    IERC20 public collateralToken;
+    ICT conditionalTokens;
     uint public totalCollateral;
     mapping(uint => uint) public positionsSum;
     mapping(address => bool) public userSet;
     mapping(address => uint[]) public probabilityDistribution;
     mapping(address => string) public justifiedPositions;
 
-    modifier onlyOwner() {
-        require(owner == msg.sender, "Ownable: caller is not the owner");
-        _;
-    }
-
     event SimpleDistributorInitialized(
-        bytes32 conditionId,
-        bytes32 parentCollection,
         address collateralToken,
-        address ctAddress,
+        address creator,
         uint[] indexSets,
-        uint amountToSplit,
-        uint timeOut
+        uint question_index,
+        uint distributor_index
     );
+    event DistributorStarted(uint initial_amount, uint timeout, uint price, uint fee);
     event UserSetProbability(address who, uint[] userDistribution, string justification);
     event StatusChanged(Stages status);
     event UserRedemption(address who, uint[] redemption);
     event PredictionFunded(address who, uint amount);
-    event TimeOutUpdated(uint timeOut);
+    event TimeOutUpdated(uint timeout);
     
     constructor() {}
     function initialize(        
-        bytes32 _conditionId,
-        bytes32 parentCollection,
-        address _collateralToken,
-        address _ctAddress,
-        uint[] calldata _indexSets,
-        uint _amountToSplit,
-        uint _timeOut
+        address creator,
+        address _collateral,
+        address ct_address,        
+        uint[] calldata _indexSets,        
+        uint _question_index,
+        uint _distributor_index
     ) initializer public {
-        owner = msg.sender;
-        totalCollateral = _amountToSplit;
-        collateralToken = IERC20(_collateralToken);
-        collateralToken.approve(_ctAddress, _amountToSplit);
+        factory = msg.sender;
+        _grantRole(MANAGER_ROLE, factory);
+        _grantRole(DEFAULT_ADMIN_ROLE, factory);
+        _grantRole(MANAGER_ROLE, creator);
+        question_index = _question_index;
+        distributor_index = _distributor_index;        
         indexSets = _indexSets;
-        ctAddress = _ctAddress;
-        collection = parentCollection; // bytes32(0) for collateral
-        conditionId = _conditionId;
-        timeOut = _timeOut;
-        ICT(_ctAddress).splitPosition(
-            collateralToken,
-            parentCollection,
-            _conditionId,
-            _indexSets,
-            _amountToSplit
-        );
-        status = Stages.Open;
+        collateralToken = IERC20(_collateral);
+        conditionalTokens = ICT(ct_address);
+        status = Stages.Preparing;
         emit SimpleDistributorInitialized(
-            _conditionId,
-            parentCollection,
-            _collateralToken,
-            _ctAddress,
+            _collateral,
+            creator,
             _indexSets,
-            _amountToSplit,
-            _timeOut
+            _question_index,
+            _distributor_index
         );
+    }
+
+    function configure(
+        uint _amountToSplit, 
+        uint _timeout,
+        uint _price,
+        uint _fee
+    ) public onlyRole(MANAGER_ROLE) {
+        // checks (timenow > now)
+        // amountToSplit > 0
+        // fee < 5%
+        price = _price;
+        fee = _fee;
+        timeout = _timeout;
+        totalCollateral = _amountToSplit;
+        bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
+        addFunds(conditionId, _amountToSplit);
+        status = Stages.Open;
+        emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
+    }
+
+    function addFunds(bytes32 conditionId, uint amount) public {
+        require(status != Stages.Redemption, 'Prediction terminated');
+        collateralToken.transferFrom(
+            msg.sender,
+            address(this),
+            amount
+        );
+        totalCollateral += amount;
+        collateralToken.approve(address(conditionalTokens), amount);
+        bytes32 collection = IQuestionFactory(factory).getParentCollection(distributor_index);
+        conditionalTokens.splitPosition(
+            collateralToken,
+            collection, 
+            conditionId,
+            indexSets,
+            amount
+        );
+        emit PredictionFunded(msg.sender, amount);
     }
 
     function setProbabilityDistribution(
@@ -93,10 +130,10 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
     ) public {
         address sender = msg.sender;
         uint len = indexSets.length;
-        require(status == Stages.Open, 'This contract is blocked');
+        require(status == Stages.Open, 'Contract not open');
         require(distribution.length == len, 'Wrong distribution provided');        
-        if (timeOut > 0) {
-            require(block.timestamp < timeOut, 'Time is out');
+        if (timeout > 0) {
+            require(block.timestamp < timeout, 'Time is out');
         }
         justifiedPositions[sender] = justification;
         uint sum;
@@ -118,43 +155,24 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
         emit UserSetProbability(sender, newPosition, justification);
     }
 
-    function addFunds(uint amount) public {
-        require(status != Stages.Redemption, 'Prediction terminated');
-        collateralToken.transferFrom(
-            msg.sender,
-            address(this),
-            amount
-        );
-        totalCollateral += amount;
-        collateralToken.approve(ctAddress, amount);
-        ICT(ctAddress).splitPosition(
-            collateralToken,
-            collection,
-            conditionId,
-            indexSets,
-            amount
-        );
-        emit PredictionFunded(msg.sender, amount);
-    }
-
-    function close() public onlyOwner {
+    function close() public onlyRole(MANAGER_ROLE) {
         status = Stages.Closed;
         emit StatusChanged(status);
     }
-    function open() public onlyOwner {
+    function open() public onlyRole(MANAGER_ROLE) {
         require(status != Stages.Redemption);
         status = Stages.Open;
         emit StatusChanged(status);
     }    
-    function redemptionTime() public onlyOwner {
+    function redemptionTime() public onlyRole(MANAGER_ROLE) {
         status = Stages.Redemption;
         emit StatusChanged(status);
     }    
-    function changeTimeOut(uint _timeOut) public onlyOwner {
+    function changeTimeOut(uint _timeout) public onlyRole(MANAGER_ROLE) {
         require(status != Stages.Redemption, 'Redemption done');
-        require(_timeOut > timeOut, 'Wrong value');
-        timeOut = _timeOut;
-        emit TimeOutUpdated(_timeOut);
+        require(_timeout > timeout, 'Wrong value');
+        timeout = _timeout;
+        emit TimeOutUpdated(_timeout);
     }
     function redeem() public {        
         address payable sender = payable(msg.sender);
@@ -163,22 +181,24 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
         uint[] storage userPosition = probabilityDistribution[sender];
         uint[] memory returnedTokens = new uint[](indexSets.length);
         uint[] memory positionIds = new uint[](indexSets.length);
+        bytes32 collection = IQuestionFactory(factory).getParentCollection(distributor_index);
+        bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
         userSet[sender] = false;
         for (uint i=0; i < indexSets.length; i++) {
-            bytes32 collectionId = ICT(ctAddress).getCollectionId(
+            bytes32 collectionId = conditionalTokens.getCollectionId(
                 collection,
                 conditionId,
                 indexSets[i]
             );
-            uint positionId = ICT(ctAddress).getPositionId(
+            uint positionId = conditionalTokens.getPositionId(
                 address(collateralToken),
                 collectionId
             );
             positionIds[i] = positionId;
-            //uint tokenBalance = ICT(ctAddress).balanceOf(address(this), positionId);
+            //uint tokenBalance = conditionalTokens.balanceOf(address(this), positionId); // yeah.. like i can redeem collateral
             returnedTokens[i] = totalCollateral * userPosition[i] / (positionsSum[i]); // * decimals            
         }
-        IERC1155(ctAddress).safeBatchTransferFrom(
+        IERC1155(address(conditionalTokens)).safeBatchTransferFrom(
             address(this),
             sender,
             positionIds,
@@ -186,6 +206,10 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
             '0x'
         );
         emit UserRedemption(sender, returnedTokens);
+    }
+
+    function getCollateral() public view returns (address) {
+        return address(collateralToken);
     }
 
     function getProbabilityDistribution() public view returns (uint[] memory) {
@@ -196,6 +220,18 @@ contract SimpleDistributor is Initializable, ERC1155Holder {
         }
         return current;
     }
+
+    ///@dev support interface should concatenate all supported interfaces
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(AccessControl, ERC1155Receiver)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
+    }
+
 
 }
 

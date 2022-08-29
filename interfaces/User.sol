@@ -19,7 +19,48 @@ contract User is DSTest, ERC1155Holder {
         return collateralToken.approve(spender, amount);
     }
 
+///////////////////////////////////////////////////////////////FACTORY FUNCTIONS
+    function createDistributor(
+        address factory,
+        bytes32 _parentCollection,
+        address _collateralToken, 
+        uint[] calldata _indexSets,
+        uint template_index, 
+        uint _question_index 
+    ) public returns (address) {
+      return IQuestionFactory(factory).createDistributor(
+        _parentCollection,
+        _collateralToken, 
+        _indexSets,
+        template_index, 
+        _question_index 
+      );
+
+    }
+
+
+
 ///////////////////////////////////////////////////////////////DISTRIBUTOR FUNCTIONS
+
+    function configure(
+      address distributor,
+      uint amountToSplit, 
+      uint timeOut,
+      uint price,
+      uint fee
+    ) public {
+      return SimpleDistributor(distributor).configure(
+        amountToSplit, 
+        timeOut,
+        price,
+        fee
+      );
+    }
+
+    function closeDistributor(address distributor) public {
+      return SimpleDistributor(distributor).close();
+    }
+
     // setPosition (update)
     function setProbabilityDistribution(address distributor, uint[] calldata distribution, string calldata justification) public {
       return SimpleDistributor(distributor).setProbabilityDistribution(distribution, justification);
@@ -27,11 +68,6 @@ contract User is DSTest, ERC1155Holder {
     // redeem
     function redeem(address distributor) public {
       return SimpleDistributor(distributor).redeem(); 
-    }
-
-////////////////////////////////////////////////////////////////NFTs functions
-    function approveERC1155(address contractAddress, address operator) public {
-      return IERC1155(contractAddress).setApprovalForAll(operator, true);
     }
 
     function reportPayouts(address cTAddress, bytes32 questionId, uint[] calldata payouts) public {
@@ -51,5 +87,10 @@ contract User is DSTest, ERC1155Holder {
         indexSets
       );
     }
+////////////////////////////////////////////////////////////////NFTs functions
+    function approveERC1155(address contractAddress, address operator) public {
+      return IERC1155(contractAddress).setApprovalForAll(operator, true);
+    }
+
 
 }
