@@ -61,6 +61,10 @@ contract User is DSTest, ERC1155Holder {
       return SimpleDistributor(distributor).close();
     }
 
+    function redemptionTime(address distributor) public {
+      return SimpleDistributor(distributor).redemptionTime();
+    }
+
     // setPosition (update)
     function setProbabilityDistribution(address distributor, uint[] calldata distribution, string calldata justification) public {
       return SimpleDistributor(distributor).setProbabilityDistribution(distribution, justification);
@@ -72,6 +76,10 @@ contract User is DSTest, ERC1155Holder {
 
     function reportPayouts(address cTAddress, bytes32 questionId, uint[] calldata payouts) public {
       return ICT(cTAddress).reportPayouts(questionId, payouts);
+    }
+
+    function changeTimeOut(address distributor, uint timeout) public {
+      return SimpleDistributor(distributor).changeTimeOut(timeout);
     }
 
     function redeemPositions(

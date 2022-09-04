@@ -28,19 +28,21 @@ interface ICT {
         bytes32 parentCollectionId,
         bytes32 conditionId,
         uint256 indexSet
-    ) external returns (bytes32); 
+    ) external view returns (bytes32); 
     function getPositionId(
         address collateralToken,
         bytes32 collectionId
-    ) external returns (uint256);
+    ) external view returns (uint256);
     function redeemPositions(
         IERC20 collateralToken, 
         bytes32 parentCollectionId, 
         bytes32 conditionId, 
         uint[] calldata indexSets
     ) external;
-   function reportPayouts(bytes32 questionId, uint[] calldata payouts) external;
-   function payoutDenominator(bytes32) external view returns (uint);
+    function reportPayouts(bytes32 questionId, uint[] calldata payouts) external;
+    function payoutDenominator(bytes32) external view returns (uint);
+   //function payoutNumerators(bytes32) external view returns (uint[] memory);
+    function changeTimeOut(uint timeout) external;
 //-------------------- ERC1155
     function balanceOf(address account, uint256 id) external view returns (uint256);
     function balanceOfBatch(address[] calldata accounts, uint256[] calldata ids)

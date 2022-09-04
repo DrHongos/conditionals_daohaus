@@ -58,6 +58,8 @@ contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
     event TimeOutUpdated(uint timeout);
     
     constructor() {}
+
+
     function initialize(        
         address creator,
         address _collateral,
@@ -97,7 +99,6 @@ contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
         price = _price;
         fee = _fee;
         timeout = _timeout;
-        totalCollateral = _amountToSplit;
         bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
         addFunds(conditionId, _amountToSplit);
         status = Stages.Open;
@@ -175,29 +176,11 @@ contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
         emit TimeOutUpdated(_timeout);
     }
     function redeem() public {        
-        address payable sender = payable(msg.sender);
+        address payable sender = payable(msg.sender); // payable for ERC1155?
         require(status == Stages.Redemption, 'Redemption is still in the future');
         require(userSet[sender], 'User not registered or already redeemed');        
-        uint[] storage userPosition = probabilityDistribution[sender];
-        uint[] memory returnedTokens = new uint[](indexSets.length);
-        uint[] memory positionIds = new uint[](indexSets.length);
-        bytes32 collection = IQuestionFactory(factory).getParentCollection(distributor_index);
-        bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
-        userSet[sender] = false;
-        for (uint i=0; i < indexSets.length; i++) {
-            bytes32 collectionId = conditionalTokens.getCollectionId(
-                collection,
-                conditionId,
-                indexSets[i]
-            );
-            uint positionId = conditionalTokens.getPositionId(
-                address(collateralToken),
-                collectionId
-            );
-            positionIds[i] = positionId;
-            //uint tokenBalance = conditionalTokens.balanceOf(address(this), positionId); // yeah.. like i can redeem collateral
-            returnedTokens[i] = totalCollateral * userPosition[i] / (positionsSum[i]); // * decimals            
-        }
+        userSet[sender] = false; // maybe a bool "redeemed"
+        (uint[] memory positionIds, uint[] memory returnedTokens) = getUserRedemption(sender);
         IERC1155(address(conditionalTokens)).safeBatchTransferFrom(
             address(this),
             sender,
@@ -205,6 +188,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
             returnedTokens,
             '0x'
         );
+        // what!? i need to diminish the total results!
         emit UserRedemption(sender, returnedTokens);
     }
 
@@ -219,6 +203,27 @@ contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
             current[i] = positionsSum[i];
         }
         return current;
+    }
+
+    function getUserRedemption(address who) public view returns(uint[] memory, uint[] memory) {
+        bytes32 collection = IQuestionFactory(factory).getParentCollection(distributor_index);
+        bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
+        uint[] memory returnedTokens = new uint[](indexSets.length);
+        uint[] memory positionIds = new uint[](indexSets.length);
+        for (uint i=0; i < indexSets.length; i++) {
+            bytes32 collectionId = conditionalTokens.getCollectionId(
+                collection,
+                conditionId,
+                indexSets[i]
+            );
+            uint positionId = conditionalTokens.getPositionId(
+                address(collateralToken),
+                collectionId
+            );
+            positionIds[i] = positionId;
+            returnedTokens[i] = totalCollateral * probabilityDistribution[who][i] / (positionsSum[i]);
+        }
+        return (positionIds, returnedTokens);
     }
 
     ///@dev support interface should concatenate all supported interfaces

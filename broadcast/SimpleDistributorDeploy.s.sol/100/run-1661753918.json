@@ -1,0 +1,30 @@
+{
+  "transactions": [
+    {
+      "hash": "0x8f527352109e3e63a6156388d6d77b5d2fd0bd0d1ba6f644597d8f7ce912b93e",
+      "transactionType": "CALL",
+      "contractName": null,
+      "contractAddress": "0x3ff7dd8a9f71c8208397957eda1001f48d03eb32",
+      "function": null,
+      "arguments": null,
+      "transaction": {
+        "type": "0x02",
+        "from": "0x755d6ac49b8b5cde1ba13588f65808144d7edcc7",
+        "to": "0x3ff7dd8a9f71c8208397957eda1001f48d03eb32",
+        "gas": "0x12684",
+        "value": "0x0",
+        "data": "0x2f2ff15d828634d95e775031b9ff576b159a8509d3053581a8c9c4d7d86899e0afcd882f000000000000000000000000816a4b059883692f3852e82f343b96b5903b9f03",
+        "nonce": "0x23",
+        "accessList": []
+      }
+    }
+  ],
+  "receipts": [],
+  "libraries": [],
+  "pending": [
+    "0x8f527352109e3e63a6156388d6d77b5d2fd0bd0d1ba6f644597d8f7ce912b93e"
+  ],
+  "path": "broadcast/SimpleDistributorDeploy.s.sol/100/run-latest.json",
+  "returns": {},
+  "timestamp": 1661753918
+}

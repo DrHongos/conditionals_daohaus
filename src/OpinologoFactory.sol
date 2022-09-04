@@ -16,7 +16,7 @@ contract QuestionsFactory is AccessControl {
     bytes32 public constant CURATOR_ROLE = keccak256("CURATOR_ROLE");
     
     address CT_CONTRACT;
-    // stack too deep
+
     struct Distributor {
         bytes32 collection;
         address contract_address;
@@ -63,6 +63,7 @@ contract QuestionsFactory is AccessControl {
     ///@dev creates a new condition and stores it
     function createQuestion(
         address _oracle,         // solver of the condition
+        // TODO receive a string and create the bytes32 (so my event can have the cid directly?)
         bytes32 _questionId,     // referrer to the condition (used to store IPFS cid of question data)
         uint _responses       // number of possible outcomes
     ) public onlyRole(CREATOR_ROLE) returns (bytes32 conditionId) {

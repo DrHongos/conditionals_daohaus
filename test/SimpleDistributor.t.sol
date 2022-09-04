@@ -58,7 +58,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         vm.label(address(carol), "Carol");
         deedee = new User(address(collateralToken));
         vm.label(address(deedee), "deedee");
-        collateralToken.mint(address(alice), initialBalance);        
+        collateralToken.mint(address(alice), initialBalance);
         distributor_template = new SimpleDistributor();
         factory = new QuestionsFactory(CT_gnosis);
         vm.label(address(factory), "Factory");
@@ -173,6 +173,119 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         bob.setProbabilityDistribution(address(distributor), bobPrediction, 'A long string to test storage issues');
     }
 
+    function test_addFunds() public {
+        address distributor = factory.getDistributorAddress(0);
+        alice.approveCollateral(distributor, initialBalance);
+        alice.configure(
+            factory.getDistributorAddress(0),
+            initialBalance, //amountToSplit
+            0, //timeOut (no limit)
+            0, //price
+            0 //fee
+        );
+        collateralToken.mint(address(this), initialBalance);
+        collateralToken.approve(address(distributor), initialBalance);
+        SimpleDistributor distributor_artifact = SimpleDistributor(distributor);
+        assertEq(distributor_artifact.totalCollateral(), initialBalance); // idk why!
+        bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index
+        distributor_artifact.addFunds(conditionId, initialBalance);
+        assertEq(distributor_artifact.totalCollateral(), 2*initialBalance); // idk why!
+    }
+
+    function test_complete() public {
+        bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index
+        address distributor = factory.getDistributorAddress(0);
+        alice.approveCollateral(distributor, initialBalance);
+        alice.configure(
+            factory.getDistributorAddress(0),
+            initialBalance, //amountToSplit
+            0, //timeOut (no limit)
+            0, //price
+            0 //fee
+        );        
+        uint[] memory alicePrediction = new uint[](3);
+        alicePrediction[0] = uint(2);
+        alicePrediction[1] = uint(3);
+        alicePrediction[2] = uint(5);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, justification2);
+
+        uint[] memory bobPrediction = new uint[](3);
+        bobPrediction[0] = uint(8);
+        bobPrediction[1] = uint(8);
+        bobPrediction[2] = uint(8);
+        bob.setProbabilityDistribution(address(distributor), bobPrediction, justification1);
+
+        alice.redemptionTime(distributor); //
+
+        uint[] memory globalPredictions = new uint[](3);
+        globalPredictions[0] = uint(53);
+        globalPredictions[1] = uint(63);
+        globalPredictions[2] = uint(83);
+        assertEq(SimpleDistributor(distributor).getProbabilityDistribution(), globalPredictions);
+        
+        SimpleDistributor(distributor).getUserRedemption(address(alice));
+        SimpleDistributor(distributor).getUserRedemption(address(bob));
+
+        alice.redeem(distributor);
+        bob.redeem(distributor);
+        uint[] memory indexSets = new uint[](3);
+        indexSets[0] = uint(1); //0b001        
+        indexSets[1] = uint(2); //0b010       
+        indexSets[2] = uint(4); //0b100
+
+        uint[] memory payout = new uint[](3);
+        payout[0] = 1;
+        payout[1] = 0;
+        payout[2] = 0;
+        oracle.reportPayouts(CT_gnosis, questionId1, payout);
+
+        ICT(CT_gnosis).payoutDenominator(conditionId);
+        ICT(CT_gnosis).getOutcomeSlotCount(conditionId);
+//        ICT(CT_gnosis).payoutNumerators(conditionId); //evm revert!
+
+        alice.redeemPositions(
+            CT_gnosis,
+            rootCollateral,
+            conditionId,
+            indexSets
+        );
+        bob.redeemPositions(
+            CT_gnosis,
+            rootCollateral,
+            conditionId,
+            indexSets
+        );
+        assertGt(collateralToken.balanceOf(address(alice)), 0);
+        assertGt(collateralToken.balanceOf(address(bob)), 0);
+    }
+    
+    function test_timeOut() public {
+        bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index
+        address distributor = factory.getDistributorAddress(0);
+        alice.approveCollateral(distributor, initialBalance);
+        alice.configure(
+            factory.getDistributorAddress(0),
+            initialBalance, //amountToSplit
+            defaultTimeOut, //timeOut (no limit)
+            0, //price
+            0 //fee
+        );        
+        uint[] memory alicePrediction = new uint[](3);
+        alicePrediction[0] = uint(2);
+        alicePrediction[1] = uint(3);
+        alicePrediction[2] = uint(5);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        vm.warp(defaultTimeOut);
+        vm.expectRevert(bytes("Time is out"));//
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        alice.changeTimeOut(distributor, defaultTimeOut + 1 days);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        alice.redemptionTime(distributor);
+        vm.expectRevert(bytes("Redemption done"));//
+        alice.changeTimeOut(distributor, defaultTimeOut + 2 days);        
+    }
+
+
 //////////////////////////////////////////////////////////////////////////////////////        
 //
 //          Below tests need to be adapted to new version
@@ -205,99 +318,9 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(distributor.justifiedPositions(address(alice)), justification1);
     }
  */
-/* 
-    function test_addFunds() public {
-        uint[] memory indexSets = new uint[](3);
-        indexSets[0] = uint(1); //0b001        
-        indexSets[1] = uint(2); //0b010       
-        indexSets[2] = uint(4); //0b100       
-        collateralToken.transfer(address(distributor), initialBalance);
-        createIncentivizedPrediction(questionId1, indexSets, 0);
-        collateralToken.mint(address(this), initialBalance);
-        collateralToken.approve(address(distributor), initialBalance);
-        distributor.addFunds(initialBalance);
-        assertEq(distributor.totalCollateral(), 2*initialBalance);
-    }
- */
-/* 
-    function test_timeOut() public {
-        uint[] memory indexSets = new uint[](3);
-        indexSets[0] = uint(1); //0b001        
-        indexSets[1] = uint(2); //0b010       
-        indexSets[2] = uint(4); //0b100       
-        collateralToken.transfer(address(distributor), initialBalance);
-        createIncentivizedPrediction(questionId1, indexSets, defaultTimeOut);
-        uint[] memory alicePrediction = new uint[](3);
-        alicePrediction[0] = uint(2);
-        alicePrediction[1] = uint(3);
-        alicePrediction[2] = uint(5);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
-        vm.warp(defaultTimeOut+1);
-        vm.expectRevert(bytes("Time is out"));//
-        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
-        distributor.changeTimeOut(defaultTimeOut + 1 days);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
-        distributor.redemptionTime();
-        vm.expectRevert(bytes("Redemption done"));//
-        distributor.changeTimeOut(defaultTimeOut + 2 days);        
-    }
- */
-/* 
-    function test_complete() public {
-        uint[] memory indexSets = new uint[](3);
-        indexSets[0] = uint(1); //0b001        
-        indexSets[1] = uint(2); //0b010       
-        indexSets[2] = uint(4); //0b100       
-        collateralToken.transfer(address(distributor), initialBalance);
-        createIncentivizedPrediction(questionId1, indexSets, 0);
-        uint[] memory alicePrediction = new uint[](3);
-        alicePrediction[0] = uint(2);
-        alicePrediction[1] = uint(3);
-        alicePrediction[2] = uint(5);
-        alice.setProbabilityDistribution(address(distributor), alicePrediction, justification2);
 
-        uint[] memory bobPrediction = new uint[](3);
-        bobPrediction[0] = uint(8);
-        bobPrediction[1] = uint(8);
-        bobPrediction[2] = uint(8);
-        bob.setProbabilityDistribution(address(distributor), bobPrediction, justification1);
 
-        uint[] memory payout = new uint[](3);
-        payout[0] = 1;
-        payout[1] = 0;
-        payout[2] = 0;
-        oracle.reportPayouts(CT_gnosis, questionId1, payout);
-        distributor.redemptionTime();
 
-        uint[] memory globalPredictions = new uint[](3);
-        globalPredictions[0] = uint(53);
-        globalPredictions[1] = uint(63);
-        globalPredictions[2] = uint(83);
-        assertEq(distributor.getProbabilityDistribution(), globalPredictions);
-        
-        alice.redeem(address(distributor));
-        bob.redeem(address(distributor));
-
-        alice.redeemPositions(
-            CT_gnosis,
-            rootCollateral,
-            conditionsIds[questionId1],
-            indexSets
-        );
-        bob.redeemPositions(
-            CT_gnosis,
-            rootCollateral,
-            conditionsIds[questionId1],
-            indexSets
-        );
-        assertGt(collateralToken.balanceOf(address(alice)), 0);
-        assertGt(collateralToken.balanceOf(address(bob)), 0);
-        
-        // check balances
-        // it works, but i need to improve the aproximation
-    }
-
- */
 /*         uint subTotal = alicePrediction[0]+bobPrediction[0];
         assertEq(collateralToken.balanceOf(address(alice)), initialBalance * alicePrediction[0] / subTotal);
         assertEq(collateralToken.balanceOf(address(bob)), initialBalance * bobPrediction[0] / subTotal); */
