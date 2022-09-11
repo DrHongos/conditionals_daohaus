@@ -99,7 +99,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
         price = _price;
         fee = _fee;
         timeout = _timeout;
-        bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
+        bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index); // it does not change..
         addFunds(conditionId, _amountToSplit);
         status = Stages.Open;
         emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
@@ -143,10 +143,15 @@ contract SimpleDistributor is Initializable, ERC1155Holder, AccessControl {
         }
         require(sum > 0, "At least one value");
         uint[] memory newPosition = new uint[](len);                
+        if (!userSet[sender] && price > 0) {
+            bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
+            addFunds(conditionId, price); // test
+        }
         for (uint i = 0; i < len; i++) {
             uint value = distribution[i] * 100 / sum;
             newPosition[i] = value;
             positionsSum[i] += value;            
+    // the only reference to if its the first participation.. cannot add price payment in here
             if (userSet[sender]) {
                 positionsSum[i] -= probabilityDistribution[sender][i];
             }    

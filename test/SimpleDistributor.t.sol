@@ -153,6 +153,48 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(bobPrediction[2]*10, bobStoredPrediction[2]);     */
     }
 
+     function test_distribution_with_price() public {
+        uint initial_amount = 10000;
+        uint price_value = 500;
+        address distributor = factory.getDistributorAddress(0);
+        SimpleDistributor distributor_artifact = SimpleDistributor(distributor);
+        collateralToken.mint(address(bob), price_value);
+        collateralToken.mint(address(carol), price_value);
+        alice.approveCollateral(distributor, initial_amount);
+        alice.configure(
+            factory.getDistributorAddress(0),
+            initial_amount, //amountToSplit
+            0, //timeOut (no limit)
+            price_value, //price
+            0 //fee
+        );
+        uint[] memory bobPrediction = new uint[](3);
+        bobPrediction[0] = uint(2);
+        bobPrediction[1] = uint(3);
+        bobPrediction[2] = uint(5);
+        bob.approveCollateral(address(distributor), price_value);
+        bob.setProbabilityDistribution(address(distributor), bobPrediction, 'A long string to test storage issues');
+        assertTrue(ISimpleDistributor(distributor).userSet(address(bob)));
+        assertEq(collateralToken.balanceOf(address(bob)), 0);
+        assertEq(distributor_artifact.totalCollateral(), price_value + initial_amount);
+        // update does not cost extra
+        uint[] memory bobPrediction2 = new uint[](3);
+        bobPrediction2[0] = uint(1);
+        bobPrediction2[1] = uint(1);
+        bobPrediction2[2] = uint(0);
+        bob.setProbabilityDistribution(address(distributor), bobPrediction, 'A long string to test storage issues');
+        assertEq(distributor_artifact.totalCollateral(), price_value + initial_amount);
+        uint[] memory carolPrediction = new uint[](3);
+        carolPrediction[0] = uint(0);
+        carolPrediction[1] = uint(1);
+        carolPrediction[2] = uint(1);
+        carol.approveCollateral(address(distributor), price_value);
+        carol.setProbabilityDistribution(address(distributor), carolPrediction, 'A long string to test storage issues');
+        assertTrue(ISimpleDistributor(distributor).userSet(address(carol)));
+        assertEq(collateralToken.balanceOf(address(carol)), 0);
+        assertEq(distributor_artifact.totalCollateral(), 2*price_value + initial_amount);
+        // test redeem amounts
+    }
 
      function testFail_setPredictionClosed() public {
         uint initial_amount = 10000;
@@ -186,10 +228,10 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         collateralToken.mint(address(this), initialBalance);
         collateralToken.approve(address(distributor), initialBalance);
         SimpleDistributor distributor_artifact = SimpleDistributor(distributor);
-        assertEq(distributor_artifact.totalCollateral(), initialBalance); // idk why!
+        assertEq(distributor_artifact.totalCollateral(), initialBalance);
         bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index
         distributor_artifact.addFunds(conditionId, initialBalance);
-        assertEq(distributor_artifact.totalCollateral(), 2*initialBalance); // idk why!
+        assertEq(distributor_artifact.totalCollateral(), 2*initialBalance);
     }
 
     function test_complete() public {

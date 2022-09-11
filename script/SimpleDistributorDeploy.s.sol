@@ -14,9 +14,12 @@ contract SimpleDistributorDeployment is Script {
     address currentFactory = 0x3Ff7dD8a9f71c8208397957eDa1001f48D03eB32;
     function run() public {
         vm.startBroadcast();
-        SimpleDistributor distributor = new SimpleDistributor();
-        QuestionsFactory factory = new QuestionsFactory(CT_GNOSIS); // only on factory deployment
-        factory.setTemplate(address(distributor), 0);
+        SimpleDistributor distributor = new SimpleDistributor();        
+//        QuestionsFactory factory = new QuestionsFactory(CT_GNOSIS); // only on factory deployment
+//        factory.setTemplate(address(distributor), 0);
+
+        QuestionsFactory(currentFactory).setTemplate(address(distributor), 0);
+
 //        QuestionsFactory(currentFactory).grantRole(CREATOR_ROLE, 0x816a4B059883692F3852E82f343b96B5903b9F03);
         vm.stopBroadcast();
     }
