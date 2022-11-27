@@ -146,7 +146,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         bob.setProbabilityDistribution(address(distributor), bobPrediction, 'A long string to test storage issues');
         // *10 comes from a proportion given in the distributor
         assertTrue(ISimpleDistributor(distributor).userSet(address(bob)));
-/*      reverts the call to get the prediction of an address..idk
+/*      reverts the call to get the prediction of an address..idk (needs 2 args (prob))
          uint[] memory bobStoredPrediction = ISimpleDistributor(distributor).probabilityDistribution(address(bob));
         assertEq(bobPrediction[0]*10, bobStoredPrediction[0]);
         assertEq(bobPrediction[1]*10, bobStoredPrediction[1]);    
@@ -234,6 +234,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(distributor_artifact.totalCollateral(), 2*initialBalance);
     }
 
+    // add fuzz!
     function test_complete() public {
         bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index
         address distributor = factory.getDistributorAddress(0);
@@ -268,8 +269,6 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         SimpleDistributor(distributor).getUserRedemption(address(alice));
         SimpleDistributor(distributor).getUserRedemption(address(bob));
 
-        alice.redeem(distributor);
-        bob.redeem(distributor);
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
@@ -280,6 +279,9 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         payout[1] = 0;
         payout[2] = 0;
         oracle.reportPayouts(CT_gnosis, questionId1, payout);
+
+        alice.redeem(distributor);
+        bob.redeem(distributor);
 
         ICT(CT_gnosis).payoutDenominator(conditionId);
         ICT(CT_gnosis).getOutcomeSlotCount(conditionId);
@@ -326,7 +328,72 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         vm.expectRevert(bytes("Redemption done"));//
         alice.changeTimeOut(distributor, defaultTimeOut + 2 days);        
     }
-
+    function test_question_answered_first() public {
+        bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index
+        address distributor = factory.getDistributorAddress(0);
+        alice.approveCollateral(distributor, initialBalance);
+        alice.configure(
+            factory.getDistributorAddress(0),
+            initialBalance, //amountToSplit
+            defaultTimeOut, //timeOut (no limit)
+            0, //price
+            0 //fee
+        );        
+        uint[] memory alicePrediction = new uint[](3);
+        alicePrediction[0] = uint(2);
+        alicePrediction[1] = uint(3);
+        alicePrediction[2] = uint(5);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        uint val1 = ISimpleDistributor(distributor).probabilityDistribution(address(alice), 0);
+        uint val2 = ISimpleDistributor(distributor).probabilityDistribution(address(alice), 1);
+        uint val3 = ISimpleDistributor(distributor).probabilityDistribution(address(alice), 2);
+        // answer question
+        uint[] memory payout = new uint[](3);
+        payout[0] = 1;
+        payout[1] = 0;
+        payout[2] = 0;
+        oracle.reportPayouts(CT_gnosis, questionId1, payout);
+//        assertEq(ICT(CT_gnosis).payoutNumerators(conditionId, 0), 1);
+//        assertEq(ICT(CT_gnosis).payoutNumerators(conditionId, 1), 0);
+//        assertEq(ICT(CT_gnosis).payoutNumerators(conditionId, 2), 0);
+        //vm.expectRevert(bytes("Question was answered"));
+        uint[] memory aliceNewPrediction = new uint[](3);
+        aliceNewPrediction[0] = uint(1);
+        aliceNewPrediction[1] = uint(0);
+        aliceNewPrediction[2] = uint(0);
+        alice.setProbabilityDistribution(address(distributor), aliceNewPrediction, '');
+        // check contract state payout_numerator & denominator
+        assertEq(ISimpleDistributor(distributor).question_denominator(), 1);
+        assertEq(ISimpleDistributor(distributor).probabilityDistribution(address(alice), 0), val1);
+        assertEq(ISimpleDistributor(distributor).probabilityDistribution(address(alice), 1), val2);
+        assertEq(ISimpleDistributor(distributor).probabilityDistribution(address(alice), 2), val3);
+    }
+    function test_question_answered_checked() public {
+        bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index
+        address distributor = factory.getDistributorAddress(0);
+        alice.approveCollateral(distributor, initialBalance);
+        alice.configure(
+            factory.getDistributorAddress(0),
+            initialBalance, //amountToSplit
+            defaultTimeOut, //timeOut (no limit)
+            0, //price
+            0 //fee
+        );        
+        uint[] memory alicePrediction = new uint[](3);
+        alicePrediction[0] = uint(2);
+        alicePrediction[1] = uint(3);
+        alicePrediction[2] = uint(5);
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        uint[] memory payout = new uint[](3);
+        payout[0] = 1;
+        payout[1] = 0;
+        payout[2] = 0;
+        oracle.reportPayouts(CT_gnosis, questionId1, payout);
+        alice.checkQuestion(distributor);
+        vm.expectRevert(bytes("Question answered"));// reverts but without data
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        assertEq(ISimpleDistributor(distributor).question_denominator(), 1);
+    }
 
 //////////////////////////////////////////////////////////////////////////////////////        
 //

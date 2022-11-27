@@ -82,6 +82,10 @@ contract User is DSTest, ERC1155Holder {
       return SimpleDistributor(distributor).changeTimeOut(timeout);
     }
 
+    function checkQuestion(address distributor) public {
+      return SimpleDistributor(distributor).checkQuestion();
+    }
+
     function redeemPositions(
       address cTAddress,        
       bytes32 parentCollectionId, 

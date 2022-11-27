@@ -31,12 +31,16 @@ interface ISimpleDistributor {
     event PredictionFunded(address who, uint amount);
     event TimeOutUpdated(uint timeOut);
     
+    function checkQuestion() external;
+    function question_denominator() external view returns (uint);
+    function question_numerator() external view returns (uint[] memory); 
+
+    function probabilityDistribution(address, uint) external view returns (uint);
     function status() external view returns (uint);
     function timeout() external view returns (uint);
     function price() external view returns (uint);
     function fee() external view returns (uint);
     function userSet(address) external view returns (bool);
-    function probabilityDistribution(address) external view returns (uint[] calldata);
     function setProbabilityDistribution(uint[] calldata distribution) external;
     function addFunds(uint amount) external;
     function close() external;

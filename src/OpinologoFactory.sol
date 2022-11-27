@@ -8,8 +8,10 @@ import "../interfaces/ICT.sol";
 import "../interfaces/ISimpleDistributor.sol";
 
 //  TODO
-//
-//
+//  que el creador pague a Opinologos el valor del precio del distribuidor
+//  y luego recupere con su franja de 0/3 %
+//  poner precio minimo actualizable
+//  
 contract QuestionsFactory is AccessControl {
     bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
@@ -80,7 +82,7 @@ contract QuestionsFactory is AccessControl {
         uint usingIndex = questionsCount;
         questions[usingIndex] = newQuestion;
         questionsCount++;
-        emit NewQuestionCreated(_oracle, _creator, conditionId, _questionId, _responses, usingIndex);                
+        emit NewQuestionCreated(_oracle, _creator, conditionId, _questionId, _responses, usingIndex);
     }
 
 //        onlyRole(CREATOR_ROLE)
@@ -94,8 +96,8 @@ contract QuestionsFactory is AccessControl {
         external
         returns (address newDistributorAddress)
     {
-        // NOTICE!! the test below is blocked for test issues.
-//        require(ICT(CT_CONTRACT).payoutDenominator(questions[_question_index].condition) != 0, "Question closed");
+// NOTICE!! the test below is blocked for test issues.
+// require(ICT(CT_CONTRACT).payoutDenominator(questions[_question_index].condition) != 0, "Question closed");
         address templateUsed = templates[template_index];
         require(templateUsed != address(0), "Template empty");
 
@@ -152,6 +154,7 @@ contract QuestionsFactory is AccessControl {
     function getDistributorAddress(uint index) external view returns (address) {
         return distributors[index].contract_address;
     }
+    // i dont like this ones, but let see
     function getCondition(uint index) external view returns(bytes32) {
         return questions[index].condition;
     }
