@@ -1,6 +1,6 @@
-[default]
+[profile.default]
 src = 'src'
 out = 'out'
 libs = ['lib']
-
+fs_permissions = [{ access = "read", path = "./out"}]
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

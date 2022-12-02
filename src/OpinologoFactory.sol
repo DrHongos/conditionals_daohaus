@@ -110,6 +110,7 @@ contract QuestionsFactory is AccessControl {
             question_index: _question_index        
         });
         distributors[newIndex] = newDistributor;
+        // TODO: this should be a general implementation of the initialize function
         ISimpleDistributor(newDistributorAddress).initialize(
             msg.sender,
             _collateralToken,
@@ -127,9 +128,6 @@ contract QuestionsFactory is AccessControl {
             _question_index
         );
     }
-
-    // add proxy functions to control the distributors (curator role)
-    // test
     function revokeRoleInDistributor(address account, uint index) public onlyRole(CURATOR_ROLE) {
         ISimpleDistributor(distributors[index].contract_address).revokeRole(MANAGER_ROLE, account);
     }
@@ -142,7 +140,6 @@ contract QuestionsFactory is AccessControl {
     function closeInDistributor(uint index) public onlyRole(CURATOR_ROLE) {
         ISimpleDistributor(distributors[index].contract_address).close();        
     }  
-
     function setTemplate(address _newTemplate, uint index)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)

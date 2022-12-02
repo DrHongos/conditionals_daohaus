@@ -1,6 +1,11 @@
 forge test --fork-url https://rpc.gnosischain.com
 
+try also --watch (re runs tests of files modified)
+
 since it calls CT_gnosis contract for tests
+// idea to fix that dependency: 
+Use the getCode cheatcode to deploy contracts with incompatible Solidity versions.
+
 
 NOTICE: decimals as a constant in the template is NOT replicated in clones.
 

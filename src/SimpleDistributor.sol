@@ -2,11 +2,12 @@
 pragma solidity ^0.8.2;
 
 // TODO ;
-// no redeem phase, unless its automated, conditioned to question payoutNumerator/denominator
 // a lot to do, user should redeem collateral directly 
 //
 // WRITE FUNCTIONS FOR
 // FEE
+// change price to a band of prices (handle the retribution)
+// separate library content
 // 
 
 import "../interfaces/ICT.sol";

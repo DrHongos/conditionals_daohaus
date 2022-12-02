@@ -12,6 +12,8 @@ import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPa
 
 // TODO
 // create deep position distributors..
+// create tests for revoke/add roles in distributors
+
 
 contract SimpleDistributorTest is Test, ERC1155Holder {
 
