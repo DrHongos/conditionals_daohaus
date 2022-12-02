@@ -198,7 +198,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         // test redeem amounts
     }
 
-     function testFail_setPredictionClosed() public {
+/*      function testFail_setPredictionClosed() public {
         uint initial_amount = 10000;
         address distributor = factory.getDistributorAddress(0);
         alice.approveCollateral(distributor, initial_amount);
@@ -209,13 +209,13 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
             0, //price
             0 //fee
         );
-        alice.closeDistributor(distributor);
+//        alice.closeDistributor(distributor);
         uint[] memory bobPrediction = new uint[](3);
         bobPrediction[0] = uint(2);
         bobPrediction[1] = uint(3);
         bobPrediction[2] = uint(5);
         bob.setProbabilityDistribution(address(distributor), bobPrediction, 'A long string to test storage issues');
-    }
+    } */
 
     function test_addFunds() public {
         address distributor = factory.getDistributorAddress(0);
@@ -260,8 +260,16 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         bobPrediction[2] = uint(8);
         bob.setProbabilityDistribution(address(distributor), bobPrediction, justification1);
 
-        alice.redemptionTime(distributor); //
-
+//   alice.redemptionTime(distributor); //
+        uint[] memory payout = new uint[](3);
+        payout[0] = 1;
+        payout[1] = 0;
+        payout[2] = 0;
+        oracle.reportPayouts(CT_gnosis, questionId1, payout);
+// once its answered we need to make a call (that will revert)
+        //vm.expectRevert(bytes("Question answered"));// reverts but without data
+        alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
+        
         uint[] memory globalPredictions = new uint[](3);
         globalPredictions[0] = uint(53);
         globalPredictions[1] = uint(63);
@@ -275,13 +283,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
-
-        uint[] memory payout = new uint[](3);
-        payout[0] = 1;
-        payout[1] = 0;
-        payout[2] = 0;
-        oracle.reportPayouts(CT_gnosis, questionId1, payout);
-
+        
         alice.redeem(distributor);
         bob.redeem(distributor);
 
@@ -326,9 +328,9 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
         alice.changeTimeOut(distributor, defaultTimeOut + 1 days);
         alice.setProbabilityDistribution(address(distributor), alicePrediction, '');
-        alice.redemptionTime(distributor);
-        vm.expectRevert(bytes("Redemption done"));//
-        alice.changeTimeOut(distributor, defaultTimeOut + 2 days);        
+//        alice.redemptionTime(distributor);
+//        vm.expectRevert(bytes("Redemption done"));//
+//        alice.changeTimeOut(distributor, defaultTimeOut + 2 days);        
     }
     function test_question_answered_first() public {
         bytes32 conditionId = QuestionsFactory(factory).getCondition(0);//question_index

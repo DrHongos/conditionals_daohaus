@@ -12,12 +12,14 @@ interface ISimpleDistributor {
     }
 
     function initialize(
-        address creator,        
+//        address creator,        
+        bytes32 condition,
+        bytes32 parentCollection,
         address collateral,
-        address ct_address,        
-        uint[] calldata indexSets,        
-        uint question_index,
-        uint distributor_index        
+        uint[] calldata indexSets
+//        address ct_address,        
+//        uint question_index,
+//        uint distributor_index        
     ) external;
     function configure(
         uint amountToSplit, 

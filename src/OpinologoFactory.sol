@@ -5,7 +5,7 @@ import "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICT.sol";
-import "../interfaces/ISimpleDistributor.sol";
+import "../interfaces/ISimpleDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
 
 //  TODO
 //  que el creador pague a Opinologos el valor del precio del distribuidor
@@ -91,7 +91,7 @@ contract QuestionsFactory is AccessControl {
         address _collateralToken, // token of the distributor
         uint[] calldata _indexSets, // groups for outcomes
         uint template_index, // template index
-        uint _question_index  // question index
+        uint _question_index  // question index (maybe should be condition)
     )
         external
         returns (address newDistributorAddress)
@@ -111,13 +111,21 @@ contract QuestionsFactory is AccessControl {
         });
         distributors[newIndex] = newDistributor;
         // TODO: this should be a general implementation of the initialize function
+        /* 
+            collateral,
+            condition,
+            parentCollection,
+            indexes
+            +
+            configs (depends on the template..)
+         */    
         ISimpleDistributor(newDistributorAddress).initialize(
-            msg.sender,
+//            msg.sender,
+            questions[_question_index].condition,
+            _parentCollection,
             _collateralToken,
-            CT_CONTRACT,            
-            _indexSets,
-            _question_index,
-            newIndex
+            _indexSets
+//            CT_CONTRACT,        // maybe not needed on every creation            
         );   
 
         distributorsCount += 1;
@@ -128,7 +136,7 @@ contract QuestionsFactory is AccessControl {
             _question_index
         );
     }
-    function revokeRoleInDistributor(address account, uint index) public onlyRole(CURATOR_ROLE) {
+/*     function revokeRoleInDistributor(address account, uint index) public onlyRole(CURATOR_ROLE) {
         ISimpleDistributor(distributors[index].contract_address).revokeRole(MANAGER_ROLE, account);
     }
     function grantRoleInDistributor(address account, uint index) public onlyRole(CURATOR_ROLE) {
@@ -139,7 +147,7 @@ contract QuestionsFactory is AccessControl {
     }  
     function closeInDistributor(uint index) public onlyRole(CURATOR_ROLE) {
         ISimpleDistributor(distributors[index].contract_address).close();        
-    }  
+    }   */
     function setTemplate(address _newTemplate, uint index)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -151,7 +159,7 @@ contract QuestionsFactory is AccessControl {
     function getDistributorAddress(uint index) external view returns (address) {
         return distributors[index].contract_address;
     }
-    // i dont like this ones, but let see
+    // i dont like this ones, but let's see
     function getCondition(uint index) external view returns(bytes32) {
         return questions[index].condition;
     }
