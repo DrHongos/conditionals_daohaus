@@ -2,8 +2,10 @@
 pragma solidity ^0.8.2;
 
 // TODO:
-// FEE (config address + percenteage)
-// change price to a band of prices (handle the retribution of tokens)
+// 
+// change price to a band of prices         <<
+// Fee (config address + percenteage)       <      
+// try to unify initialization + config
 // separate library content
 // OTHERS
 // user _should_ redeem collateral directly 
@@ -11,48 +13,42 @@ pragma solidity ^0.8.2;
 
 import "../interfaces/ICT.sol";
 import "../interfaces/IQuestionFactory.sol";
+import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
-//import "openzeppelin-contracts/contracts/access/AccessControl.sol";
 
+contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
+    bytes32 public conditionId;
+    bytes32 public parentCollection;
 
-contract SimpleDistributor is Initializable, ERC1155Holder { //, AccessControl
-//    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-//    bytes32 rootCollateral = 0x0000000000000000000000000000000000000000000000000000000000000000; // does not allow mixins
-    bytes32 conditionId;
-    bytes32 parentCollection;
+    uint public timeout;              //can be uint64
+    uint public price;                // change it to min/max
+    uint public fee;                  //
 
-    uint public timeout;//can be uint64
-    uint public price;  // change it to min/max
-    uint public fee;    //
-    
-//    uint public question_index;       // relation to a question in opinologos factory, used only to get condition
-//    uint public distributor_index;    // needed to get parentCollection (try to remove)
     uint public question_denominator; // store it when question is answered & internal boolean for status = redeem
     uint[] public question_numerator; // result of the question, avoiding recurrent internal calls
 
     address public factory;           // factory that creates this
     uint[] public indexSets;          // To select the positions
+    uint[] public positionIds;        // store the position ids
+
     IERC20 public collateralToken;    // ERC20 backing the tokens in game
     ICT conditionalTokens;            // matrix of conditional tokens
     uint public totalCollateral;      // keeper of the total balance
 
     mapping(uint => uint) public positionsSum;  // global sum of each position
-    mapping(address => bool) public userSet;    // more like userPlaying (used to handle the price payed and position existent)
-    mapping(address => uint[]) public probabilityDistribution; // check its not hackable, limit its top number 
-    mapping(address => string) public justifiedPositions; // optional?
+    mapping(address => bool) public userSet;    // more like user is active 
+    mapping(address => uint[]) public probabilityDistribution;  // check its not hackable, limit its top number 
+    mapping(address => string) public justifiedPositions;       // optional string for user
 
-    //address creator, 
     event SimpleDistributorInitialized(
         address collateralToken,
         uint[] indexSets,
         bytes32 condition,
         bytes32 parentCollection
     );
-//        uint question_index,
-//        uint distributor_index
     event DistributorStarted(uint initial_amount, uint timeout, uint price, uint fee);
     event UserSetProbability(address who, uint[] userDistribution, string justification);
     event UserRedemption(address who, uint[] redemption);
@@ -61,75 +57,62 @@ contract SimpleDistributor is Initializable, ERC1155Holder { //, AccessControl
     
     constructor() {}
 
-    //@dev: checker/guardian for interactions, conditioned called by status & setter of it
-    //@me: send it to a lib (will be shared by all mechanisms)
-    function guardQuestionStatus() internal returns(bool) {
-        uint root_denominator = conditionalTokens.payoutDenominator(conditionId);
-        if(root_denominator != 0) {
-            question_denominator = root_denominator;
-            for (uint i = 0; i < indexSets.length; i++) {// can be unsafe
-                question_numerator.push(conditionalTokens.payoutNumerators(conditionId, i));
-            }
-            return true;
-        } else return false;
-    }
 
 /* 
 Can initialization and configuration be just one?
 
 */
     function initialize(
-//        address creator, // not needed
         bytes32 _condition,
         bytes32 _parentCollection,
         address _collateral,
-//        address ct_address,
         uint[] calldata _indexSets
-        //uint _question_index,   // to get condition             CHANGE AND TEST
-        //uint _distributor_index // to get parentCollection      CHANGE AND TEST
     ) initializer public {
         factory = msg.sender;
-        //_grantRole(MANAGER_ROLE, factory);
-        //_grantRole(DEFAULT_ADMIN_ROLE, factory);
-        //_grantRole(MANAGER_ROLE, creator);
-        //question_index = _question_index;
-        //distributor_index = _distributor_index;        
-        conditionId = _condition;//IQuestionFactory(factory).getCondition(question_index);
+        conditionId = _condition;
         parentCollection = _parentCollection;
         indexSets = _indexSets;
         collateralToken = IERC20(_collateral);
         address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce;
         conditionalTokens = ICT(CT_gnosis);
-        //status = Stages.Preparing;
-        //creator,
+        for (uint i=0; i < _indexSets.length; i++) {
+            bytes32 collectionId = conditionalTokens.getCollectionId(
+                _parentCollection,
+                _condition,
+                _indexSets[i]
+            );
+            uint positionId = conditionalTokens.getPositionId(
+                _collateral,
+                collectionId
+            );
+            positionIds.push(positionId);
+        }
         emit SimpleDistributorInitialized(
             _collateral,
             _indexSets,
             _condition,
             _parentCollection
         );
-//            _question_index,
-//            _distributor_index
     }
     function configure(
-        uint _amountToSplit, 
+        uint _amountToSplit,  // deprecate this 
         uint _timeout,
         uint _price,
         uint _fee
-    ) public { //onlyRole(MANAGER_ROLE)
+    ) public { 
         // checks (timeout > now)
         // amountToSplit > 0
         // fee < 5% // baseFee + creatorsFee
+        require(totalCollateral == 0, "Already config");
         price = _price;
         fee = _fee;
         timeout = _timeout;
-//        bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index); // it does not change..
         addFunds(conditionId, _amountToSplit);
+
         emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
     }
 
     function addFunds(bytes32 conditionId, uint amount) public {
-        require(question_denominator == 0, 'Prediction terminated');
         collateralToken.transferFrom(
             msg.sender,
             address(this),
@@ -137,7 +120,6 @@ Can initialization and configuration be just one?
         );
         totalCollateral += amount;
         collateralToken.approve(address(conditionalTokens), amount);
-        //bytes32 collection = IQuestionFactory(factory).getParentCollection(distributor_index);
         conditionalTokens.splitPosition(
             collateralToken,
             parentCollection, 
@@ -148,44 +130,44 @@ Can initialization and configuration be just one?
         emit PredictionFunded(msg.sender, amount);
     }
 
+// alternative to call setProbabilityDistribution to detect a question is answered.. deprecate?
     function checkQuestion() public {
         guardQuestionStatus();
     }
 
     // users set its position in the distributor, pay the price (if required) and update if existent
     function setProbabilityDistribution(
+        //uint amount,
         uint[] calldata distribution,
         string calldata justification
     ) public {
-        address sender = msg.sender;
-        uint len = indexSets.length;
-        require(distribution.length == len, 'Wrong distribution provided');
-        require(question_denominator == 0, "Question answered");
-        bool guardian = guardQuestionStatus();
-        if (guardian) return; // finish early
-        
         require(totalCollateral != 0, 'Contract not open'); // hack to check configuration is done
-        // if timeout (top for playing) exists check it
+        require(question_denominator == 0, "Question answered");
+        if (guardQuestionStatus()) return; // finish early
+        uint len = indexSets.length;        
+        require(distribution.length == len, 'Wrong distribution provided');
         if (timeout > 0) {
             require(block.timestamp < timeout, 'Time is out');
         }
+        address sender = msg.sender;
         justifiedPositions[sender] = justification;
-        // update global status (send to an internal function)
+
+        if (!userSet[sender] && price > 0) {
+            addFunds(conditionId, price);
+        }
+
+        // update global status (send to an internal function)      <<<
         uint sum;
         for (uint i = 0; i < len; i++) {
             sum += distribution[i];
         }
         require(sum > 0, "At least one value");
         uint[] memory newPosition = new uint[](len);                
-        if (!userSet[sender] && price > 0) {
-            //bytes32 conditionId = IQuestionFactory(factory).getCondition(question_index);
-            addFunds(conditionId, price); // test
-        }
         for (uint i = 0; i < len; i++) {
             uint value = distribution[i] * 100 / sum;
             newPosition[i] = value;
-            positionsSum[i] += value;            
-    // the only reference to if its the first participation.. cannot add price payment in here
+            positionsSum[i] += value;
+        // the only reference to if its the first participation.. cannot add price payment in here
             if (userSet[sender]) {
                 positionsSum[i] -= probabilityDistribution[sender][i];
             }    
@@ -196,7 +178,7 @@ Can initialization and configuration be just one?
         emit UserSetProbability(sender, newPosition, justification);
     }
 
-    // maybe deprecate this?
+    // maybe deprecate this? its failing as it is.. now we have no more roles!
     function changeTimeOut(uint _timeout) public { // onlyRole(MANAGER_ROLE)
         //require(msg.sender == factory, "Nope");
         require(question_denominator == 0, 'Question is answered');
@@ -209,12 +191,12 @@ Can initialization and configuration be just one?
     // TODO: 
     // redeem should call CT and return collateral directly, 
     // 2 steps to do so its bad UX, but for the moment..
-    function redeem() public { // nonReentrant ?
+    function redeem() public nonReentrant {
         address payable sender = payable(msg.sender); // payable for ERC1155?
         require(question_denominator != 0, 'Redemption is still in the future');
         require(userSet[sender], 'User not registered or already redeemed');        
         userSet[sender] = false; // maybe a bool "redeemed"
-        (uint[] memory positionIds, uint[] memory returnedTokens) = getUserRedemption(sender);
+        uint[] memory returnedTokens = getUserRedemption(sender);
         IERC1155(address(conditionalTokens)).safeBatchTransferFrom(
             address(this),
             sender,
@@ -226,7 +208,7 @@ Can initialization and configuration be just one?
 /* 
         Note, redeemPositions checks the caller balance and makes the logic to transform to collateral.
         In case y should control internally the proportional balance and get rid of ERC1155 manipulation (burned when redeemed)
-        study and test better..        
+        study and test better..
  */
         // redeemPositions(IERC20 collateralToken, bytes32 parentCollectionId, bytes32 conditionId, uint[] calldata indexSets)
         // call it in behalf of msg.sender or what?
@@ -249,25 +231,25 @@ Can initialization and configuration be just one?
         return current;
     }
 
-    // can we pre-store positionId's ?
-    function getUserRedemption(address who) public view returns(uint[] memory, uint[] memory) {
-        //bytes32 collection = IQuestionFactory(factory).getParentCollection(distributor_index);
+    function getUserRedemption(address who) public view returns(uint[] memory) {
         uint[] memory returnedTokens = new uint[](indexSets.length);
-        uint[] memory positionIds = new uint[](indexSets.length);
         for (uint i=0; i < indexSets.length; i++) {
-            bytes32 collectionId = conditionalTokens.getCollectionId(
-                parentCollection,
-                conditionId,
-                indexSets[i]
-            );
-            uint positionId = conditionalTokens.getPositionId(
-                address(collateralToken),
-                collectionId
-            );
-            positionIds[i] = positionId;
             returnedTokens[i] = totalCollateral * probabilityDistribution[who][i] / (positionsSum[i]);
         }
-        return (positionIds, returnedTokens);
+        return returnedTokens;
+    }
+
+    //@dev: checker/guardian for interactions, conditioned called by status & setter of it
+    //@me: send it to a lib (will be shared by all mechanisms)
+    function guardQuestionStatus() internal returns(bool) {
+        uint root_denominator = conditionalTokens.payoutDenominator(conditionId);
+        if(root_denominator != 0) {
+            question_denominator = root_denominator;
+            for (uint i = 0; i < indexSets.length; i++) {// can be unsafe
+                question_numerator.push(conditionalTokens.payoutNumerators(conditionId, i));
+            }
+            return true;
+        } else return false;
     }
 
     ///@dev support interface should concatenate all supported interfaces
@@ -280,7 +262,5 @@ Can initialization and configuration be just one?
     {
         return super.supportsInterface(interfaceId);
     }
-     //AccessControl, 
-
 }
 

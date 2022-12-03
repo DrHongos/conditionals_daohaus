@@ -35,8 +35,14 @@ interface ISimpleDistributor {
     
     function checkQuestion() external;
     function question_denominator() external view returns (uint);
-    function question_numerator() external view returns (uint[] memory); 
 
+    function question_numerator(uint) external view returns (uint); 
+    function positionIds(uint) external view returns (uint);
+    function indexSets(uint) external view returns (uint);
+
+    function conditionId() external view returns (bytes32);
+    function parentCollection() external view returns (bytes32);
+    function totalCollateral() external view returns (uint);
     function probabilityDistribution(address, uint) external view returns (uint);
     function status() external view returns (uint);
     function timeout() external view returns (uint);
@@ -45,13 +51,8 @@ interface ISimpleDistributor {
     function userSet(address) external view returns (bool);
     function setProbabilityDistribution(uint[] calldata distribution) external;
     function addFunds(uint amount) external;
-    function close() external;
-    function open() external;
-    function redemptionTime() external;
     function changeTimeOut(uint _timeOut) external;
     function redeem() external;
-    function hasRole(bytes32 role, address account) external view returns (bool);
-    function grantRole(bytes32 role, address account)  external;
-    function revokeRole(bytes32 role, address account)  external;
-    function getUserRedemption(address who) external view returns (uint[] memory, uint[] memory);
+    function getUserRedemption(address who) external view returns (uint[] memory);
+    function getProbabilityDistribution() external view returns (uint[] memory);
 }
