@@ -39,9 +39,19 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     uint public totalCollateral;      // keeper of the total balance
 
     mapping(uint => uint) public positionsSum;  // global sum of each position
+
+    // users data
     mapping(address => bool) public userSet;    // more like user is active 
     mapping(address => uint[]) public probabilityDistribution;  // check its not hackable, limit its top number 
     mapping(address => string) public justifiedPositions;       // optional string for user
+
+    // alternative 
+    //struct UserPosition {
+    //    uint positionSize;                // to handle price band
+    //    uint[] probabilityDistribution;   // position discrimination
+    //    string justifiedPositions;        // this one is expensive and not needed
+    //}
+    //mapping (address => UserPosition) public positions;
 
     event SimpleDistributorInitialized(
         address collateralToken,
@@ -60,7 +70,6 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
 
 /* 
 Can initialization and configuration be just one?
-
 */
     function initialize(
         bytes32 _condition,

@@ -12,7 +12,8 @@ import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPa
 
 // TODO
 // create deep position distributors..
-
+// check initialization+config on same fn
+// add other templates to see the basis stuff to start them?
 
 contract SimpleDistributorTest is Test, ERC1155Holder {
 
@@ -452,17 +453,16 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_1), Carol_returnedTokens[1]);
         assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_2), Carol_returnedTokens[2]);
 
-
 /* 
         alice.redeemPositions(
             CT_gnosis,
             rootCollateral,
-            condition,
+            condition,  // stack too deep (?)
             indexSets
         );
  */        
-
     }
+
 
 //////////////////////////////////////////////////////////////////////////////////////        
 //
