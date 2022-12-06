@@ -8,35 +8,32 @@ import "../interfaces/ICT.sol";
 import "../interfaces/ISimpleDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
 
 //  TODO
-//  que el creador pague a Opinologos el valor del precio del distribuidor
-//  y luego recupere con su franja de 0/3 %
-//  poner precio minimo actualizable
 //  
 contract QuestionsFactory is AccessControl {
     bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant CURATOR_ROLE = keccak256("CURATOR_ROLE");
     
-    address CT_CONTRACT;
+    address CT_CONTRACT; // set in constructor
 
     struct Distributor {
         bytes32 collection;
         address contract_address;
         address template;
-        uint question_index;
+        uint question_index; // should be questionId
     }
 
     struct Question {
         bytes32 condition;        
-        bytes32 questionId; // in doubt
-        address creator;    //     "
-        address oracle;     //     "
+        bytes32 questionId;
+        address creator;
+        address oracle; 
         uint outcomes;
     }
 
     mapping(uint => address) public templates;
     // also thinking about mapping(uint => bytes32) conditions & mapping(bytes32 => Question)
-    mapping(uint => Question) public questions;
+    mapping(uint => Question) public questions; // deprecate this 
     uint public questionsCount;
     mapping(uint => Distributor) public distributors;
     uint public distributorsCount;
@@ -118,15 +115,13 @@ contract QuestionsFactory is AccessControl {
             indexes
             +
             configs (depends on the template..)
-         */    
+        */
         ISimpleDistributor(newDistributorAddress).initialize(
-//            msg.sender,
             questions[_question_index].condition,
             _parentCollection,
             _collateralToken,
             _indexSets
-//            CT_CONTRACT,        // maybe not needed on every creation            
-        );   
+        );
 
         distributorsCount += 1;
         emit DistributorCreated(
@@ -136,18 +131,6 @@ contract QuestionsFactory is AccessControl {
             _question_index
         );
     }
-/*     function revokeRoleInDistributor(address account, uint index) public onlyRole(CURATOR_ROLE) {
-        ISimpleDistributor(distributors[index].contract_address).revokeRole(MANAGER_ROLE, account);
-    }
-    function grantRoleInDistributor(address account, uint index) public onlyRole(CURATOR_ROLE) {
-        ISimpleDistributor(distributors[index].contract_address).revokeRole(MANAGER_ROLE, account);
-    }
-    function redemptionTimeInDistributor(uint index) public onlyRole(CURATOR_ROLE) {
-        ISimpleDistributor(distributors[index].contract_address).redemptionTime();
-    }  
-    function closeInDistributor(uint index) public onlyRole(CURATOR_ROLE) {
-        ISimpleDistributor(distributors[index].contract_address).close();        
-    }   */
     function setTemplate(address _newTemplate, uint index)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)

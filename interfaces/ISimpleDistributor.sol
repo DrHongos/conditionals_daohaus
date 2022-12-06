@@ -48,11 +48,12 @@ interface ISimpleDistributor {
     function timeout() external view returns (uint);
     function price() external view returns (uint);
     function fee() external view returns (uint);
-    function userSet(address) external view returns (bool);
     function setProbabilityDistribution(uint[] calldata distribution) external;
     function addFunds(uint amount) external;
     function changeTimeOut(uint _timeOut) external;
     function redeem() external;
     function getUserRedemption(address who) external view returns (uint[] memory);
     function getProbabilityDistribution() external view returns (uint[] memory);
+    function getUserPosition(address who) external view returns (uint[] memory);
+    //function userSet(address) external view returns (bool);
 }

@@ -2,9 +2,10 @@
 pragma solidity ^0.8.2;
 
 // TODO:
-// 
+// test user as struct
 // change price to a band of prices         <<
-// Fee (config address + percenteage)       <      
+    // handle relation between amount and returnedTokens
+// Fee (config address + percenteage)       <
 // try to unify initialization + config
 // separate library content
 // OTHERS
@@ -41,17 +42,17 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     mapping(uint => uint) public positionsSum;  // global sum of each position
 
     // users data
-    mapping(address => bool) public userSet;    // more like user is active 
-    mapping(address => uint[]) public probabilityDistribution;  // check its not hackable, limit its top number 
-    mapping(address => string) public justifiedPositions;       // optional string for user
+    //mapping(address => bool) public userSet;    // more like user is active 
+    //mapping(address => uint[]) public probabilityDistribution;  // check its not hackable, limit its top number 
+    //mapping(address => string) public justifiedPositions;       // optional string for user
 
     // alternative 
-    //struct UserPosition {
-    //    uint positionSize;                // to handle price band
-    //    uint[] probabilityDistribution;   // position discrimination
-    //    string justifiedPositions;        // this one is expensive and not needed
-    //}
-    //mapping (address => UserPosition) public positions;
+    struct UserPosition {
+        uint positionSize;                // to handle price band
+        uint[] probabilityDistribution;   // position discrimination
+        string justifiedPositions;        // this one is expensive and not needed
+    }
+    mapping (address => UserPosition) public positions;
 
     event SimpleDistributorInitialized(
         address collateralToken,
@@ -60,7 +61,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         bytes32 parentCollection
     );
     event DistributorStarted(uint initial_amount, uint timeout, uint price, uint fee);
-    event UserSetProbability(address who, uint[] userDistribution, string justification);
+    event UserSetProbability(address who, uint[] userDistribution, uint amount, string justification);
     event UserRedemption(address who, uint[] redemption);
     event PredictionFunded(address who, uint amount);
     event TimeOutUpdated(uint timeout);
@@ -146,7 +147,7 @@ Can initialization and configuration be just one?
 
     // users set its position in the distributor, pay the price (if required) and update if existent
     function setProbabilityDistribution(
-        //uint amount,
+        uint amount,
         uint[] calldata distribution,
         string calldata justification
     ) public {
@@ -159,13 +160,14 @@ Can initialization and configuration be just one?
             require(block.timestamp < timeout, 'Time is out');
         }
         address sender = msg.sender;
-        justifiedPositions[sender] = justification;
-
-        if (!userSet[sender] && price > 0) {
-            addFunds(conditionId, price);
+        UserPosition storage user = positions[sender];
+        require(user.positionSize + amount >= price, "Price is bigger");
+        if (amount > 0) {
+            addFunds(conditionId, amount);
+            user.positionSize += amount;
         }
-
-        // update global status (send to an internal function)      <<<
+        user.justifiedPositions = justification;
+        //---
         uint sum;
         for (uint i = 0; i < len; i++) {
             sum += distribution[i];
@@ -176,15 +178,17 @@ Can initialization and configuration be just one?
             uint value = distribution[i] * 100 / sum;
             newPosition[i] = value;
             positionsSum[i] += value;
-        // the only reference to if its the first participation.. cannot add price payment in here
-            if (userSet[sender]) {
-                positionsSum[i] -= probabilityDistribution[sender][i];
-            }    
+        // the only reference to if its the first participation.. cannot add price payment in here (insuficient allowance??)
+            if (user.probabilityDistribution.length > 0) {
+                positionsSum[i] -= user.probabilityDistribution[i];
+            }
         }
+        //---
+        user.probabilityDistribution = newPosition;
         // maybe check user position < maxValue (forbid hacks) // only for fixed prices
-        probabilityDistribution[sender] = newPosition;
-        userSet[sender] = true;
-        emit UserSetProbability(sender, newPosition, justification);
+        //probabilityDistribution[sender] = newPosition;
+        //userSet[sender] = true;
+        emit UserSetProbability(sender, newPosition, amount, justification);
     }
 
     // maybe deprecate this? its failing as it is.. now we have no more roles!
@@ -203,8 +207,10 @@ Can initialization and configuration be just one?
     function redeem() public nonReentrant {
         address payable sender = payable(msg.sender); // payable for ERC1155?
         require(question_denominator != 0, 'Redemption is still in the future');
-        require(userSet[sender], 'User not registered or already redeemed');        
-        userSet[sender] = false; // maybe a bool "redeemed"
+        //
+        UserPosition storage user = positions[sender]; 
+        //require(userSet[sender], 'User not registered or already redeemed');        
+        //userSet[sender] = false; // maybe a bool "redeemed"
         uint[] memory returnedTokens = getUserRedemption(sender);
         IERC1155(address(conditionalTokens)).safeBatchTransferFrom(
             address(this),
@@ -241,13 +247,18 @@ Can initialization and configuration be just one?
     }
 
     function getUserRedemption(address who) public view returns(uint[] memory) {
+        // add positionSize in the mechanics
         uint[] memory returnedTokens = new uint[](indexSets.length);
+        UserPosition memory user = positions[who];
+        // below function assumes same multiplier (amount or positionSize) for everyone
         for (uint i=0; i < indexSets.length; i++) {
-            returnedTokens[i] = totalCollateral * probabilityDistribution[who][i] / (positionsSum[i]);
+            returnedTokens[i] = totalCollateral * user.probabilityDistribution[i] / (positionsSum[i]);
         }
         return returnedTokens;
     }
-
+    function getUserPosition(address who) public view returns(uint[] memory) {
+        return positions[who].probabilityDistribution;
+    }
     //@dev: checker/guardian for interactions, conditioned called by status & setter of it
     //@me: send it to a lib (will be shared by all mechanisms)
     function guardQuestionStatus() internal returns(bool) {
