@@ -39,6 +39,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     ICT conditionalTokens;            // matrix of conditional tokens
     uint public totalCollateral;      // keeper of the total balance
 
+    // TODO: transform to weighted positions in order to open price to be variable
     mapping(uint => uint) public positionsSum;  // global sum of each position
 
     // users data
@@ -117,12 +118,11 @@ Can initialization and configuration be just one?
         price = _price;
         fee = _fee;
         timeout = _timeout;
-        addFunds(conditionId, _amountToSplit);
-
+        addFunds(_amountToSplit);
         emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
     }
 
-    function addFunds(bytes32 conditionId, uint amount) public {
+    function addFunds(uint amount) public {
         collateralToken.transferFrom(
             msg.sender,
             address(this),
@@ -161,10 +161,10 @@ Can initialization and configuration be just one?
         }
         address sender = msg.sender;
         UserPosition storage user = positions[sender];
-        require(user.positionSize + amount >= price, "Price is bigger");
+        uint weight = user.positionSize + amount;           // TODO: handle amount = 0 (for forms templates)
+        require(weight >= price, "Price is bigger"); // checks the price payment done
         if (amount > 0) {
-            addFunds(conditionId, amount);
-            user.positionSize += amount;
+            addFunds(amount);
         }
         user.justifiedPositions = justification;
         //---
@@ -177,17 +177,14 @@ Can initialization and configuration be just one?
         for (uint i = 0; i < len; i++) {
             uint value = distribution[i] * 100 / sum;
             newPosition[i] = value;
-            positionsSum[i] += value;
-        // the only reference to if its the first participation.. cannot add price payment in here (insuficient allowance??)
+            positionsSum[i] += value * weight;
             if (user.probabilityDistribution.length > 0) {
-                positionsSum[i] -= user.probabilityDistribution[i];
+                positionsSum[i] -= user.probabilityDistribution[i] * user.positionSize;
             }
         }
         //---
+        user.positionSize = weight;
         user.probabilityDistribution = newPosition;
-        // maybe check user position < maxValue (forbid hacks) // only for fixed prices
-        //probabilityDistribution[sender] = newPosition;
-        //userSet[sender] = true;
         emit UserSetProbability(sender, newPosition, amount, justification);
     }
 
@@ -235,7 +232,6 @@ Can initialization and configuration be just one?
     function getCollateral() public view returns (address) {
         return address(collateralToken);
     }
-
     // gives a live general position (and number of outcomes)
     function getProbabilityDistribution() public view returns (uint[] memory) {
         uint size = indexSets.length;
@@ -245,22 +241,23 @@ Can initialization and configuration be just one?
         }
         return current;
     }
-
     function getUserRedemption(address who) public view returns(uint[] memory) {
-        // add positionSize in the mechanics
         uint[] memory returnedTokens = new uint[](indexSets.length);
         UserPosition memory user = positions[who];
-        // below function assumes same multiplier (amount or positionSize) for everyone
         for (uint i=0; i < indexSets.length; i++) {
-            returnedTokens[i] = totalCollateral * user.probabilityDistribution[i] / (positionsSum[i]);
+            uint weighted = user.probabilityDistribution[i] * user.positionSize; // handle positionSize = 0
+            if (weighted != 0) {
+                returnedTokens[i] = (totalCollateral * weighted) / positionsSum[i];
+            } else {
+                returnedTokens[i] = 0;
+            }
         }
         return returnedTokens;
     }
     function getUserPosition(address who) public view returns(uint[] memory) {
         return positions[who].probabilityDistribution;
     }
-    //@dev: checker/guardian for interactions, conditioned called by status & setter of it
-    //@me: send it to a lib (will be shared by all mechanisms)
+
     function guardQuestionStatus() internal returns(bool) {
         uint root_denominator = conditionalTokens.payoutDenominator(conditionId);
         if(root_denominator != 0) {
@@ -271,7 +268,6 @@ Can initialization and configuration be just one?
             return true;
         } else return false;
     }
-
     ///@dev support interface should concatenate all supported interfaces
     function supportsInterface(bytes4 interfaceId)
         public

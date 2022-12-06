@@ -9,6 +9,15 @@ Use the getCode cheatcode to deploy contracts with incompatible Solidity version
 
 NOTICE: decimals as a constant in the template is NOT replicated in clones.
 
+
+TODO:
+acabo de darme cuenta que la funcionalidad de vm.prank ()
+es la forma de testear llamadas desde usuarios externos (en lugar de "crear" instancias de los usuarios como contratos)
+Migrar y testear que asi sea..
+
+
+
+
 init conditions:
 conditionId: 0x4150c4c0eb3864b99dd6e9e406760fc00c7b3eec2b29e7996b2265d1a539aa55
 parentCollection: 0x0000000000000000000000000000000000000000000000000000000000000000

@@ -95,8 +95,8 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         assertEq(contract_address, factory.getDistributorAddress(0));
         assertEq(template, factory.templates(0));
         assertEq(question_index, 0);
-        address distributor = factory.getDistributorAddress(0);
-        vm.label(distributor, "Distributor");
+        address distributor_address = factory.getDistributorAddress(0);
+        vm.label(distributor_address, "Distributor");
 //        assertTrue(ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(factory)));
 //        assertTrue(ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
         // not the user! :D
@@ -124,11 +124,11 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
             0, // template index
             0  // question index
         );        
-        address distributor = factory.getDistributorAddress(0);
-        vm.label(distributor, "Distributor");
+        address distributor_address = factory.getDistributorAddress(0);
+        vm.label(distributor_address, "Distributor");
 //        assertEq(ISimpleDistributor(distributor).status(), 0);
         uint initial_amount = 10000; 
-        alice.approveCollateral(distributor, initial_amount);
+        alice.approveCollateral(distributor_address, initial_amount);
         alice.configure(
             factory.getDistributorAddress(0),
             initial_amount, //amountToSplit
@@ -137,9 +137,9 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
             3 //fee
         );
 //        assertEq(ISimpleDistributor(distributor).status(), 1);
-        assertEq(ISimpleDistributor(distributor).price(), 2);
-        assertEq(ISimpleDistributor(distributor).fee(), 3);
-        assertEq(ISimpleDistributor(distributor).timeout(), 1);
+        assertEq(distributor.price(), 2);
+        assertEq(distributor.fee(), 3);
+        assertEq(distributor.timeout(), 1);
     }
 
 //    function test_creator_prepareNewCondition() public {} // create factoryUser.sol
