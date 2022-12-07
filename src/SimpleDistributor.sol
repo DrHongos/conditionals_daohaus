@@ -24,9 +24,9 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     bytes32 public conditionId;
     bytes32 public parentCollection;
 
-    uint public timeout;              //can be uint64
+    uint public timeout;              // can be uint64
     uint public price;                // change it to min/max
-    uint public fee;                  //
+    uint public fee;                  // to implement
 
     uint public question_denominator; // store it when question is answered & internal boolean for status = redeem
     uint[] public question_numerator; // result of the question, avoiding recurrent internal calls
@@ -68,8 +68,6 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     event TimeOutUpdated(uint timeout);
     
     constructor() {}
-
-
 /* 
 Can initialization and configuration be just one?
 */

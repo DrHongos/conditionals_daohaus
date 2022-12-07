@@ -44,7 +44,6 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         // uint collectionsCount;
     }
 
-
     function setUp() public {
         vm.label(address(this), "Test Contract");
         collateralToken = new ERC20PresetMinterPauser("FakeUSD", "FUSD");
@@ -70,8 +69,7 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         assertEq(_oracle, address(oracle));
         assertEq(outcomes, 3);
         assertEq(quest, questionId1);
-    }
- 
+    } 
     function test_createDistributor() public {
         assertEq(factory.distributorsCount(), 0);
         bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3);
@@ -108,7 +106,6 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         //assertTrue(!ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
 
     } 
-   
     function test_createAndInitializeDistributor() public {
         bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3);
         uint[] memory indexSets = new uint[](3);
@@ -137,9 +134,9 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
             3 //fee
         );
 //        assertEq(ISimpleDistributor(distributor).status(), 1);
-        assertEq(distributor.price(), 2);
-        assertEq(distributor.fee(), 3);
-        assertEq(distributor.timeout(), 1);
+        assertEq(ISimpleDistributor(distributor_address).price(), 2);
+        assertEq(ISimpleDistributor(distributor_address).fee(), 3);
+        assertEq(ISimpleDistributor(distributor_address).timeout(), 1);
     }
 
 //    function test_creator_prepareNewCondition() public {} // create factoryUser.sol
