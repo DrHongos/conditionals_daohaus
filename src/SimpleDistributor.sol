@@ -39,8 +39,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     ICT conditionalTokens;            // matrix of conditional tokens
     uint public totalCollateral;      // keeper of the total balance
 
-    // TODO: transform to weighted positions in order to open price to be variable
-    mapping(uint => uint) public positionsSum;  // global sum of each position
+    mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
 
     // users data
     //mapping(address => bool) public userSet;    // more like user is active 
@@ -66,11 +65,14 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     event UserRedemption(address who, uint[] redemption);
     event PredictionFunded(address who, uint amount);
     event TimeOutUpdated(uint timeout);
-    
+
+    modifier openQuestion() {
+        require(question_denominator == 0, "Question answered");
+        _;
+    }
+
     constructor() {}
-/* 
-Can initialization and configuration be just one?
-*/
+
     function initialize(
         bytes32 _condition,
         bytes32 _parentCollection,
@@ -108,7 +110,7 @@ Can initialization and configuration be just one?
         uint _timeout,
         uint _price,
         uint _fee
-    ) public { 
+    ) public {
         // checks (timeout > now)
         // amountToSplit > 0
         // fee < 5% // baseFee + creatorsFee
@@ -120,7 +122,7 @@ Can initialization and configuration be just one?
         emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
     }
 
-    function addFunds(uint amount) public {
+    function addFunds(uint amount) public openQuestion {
         collateralToken.transferFrom(
             msg.sender,
             address(this),
@@ -148,9 +150,8 @@ Can initialization and configuration be just one?
         uint amount,
         uint[] calldata distribution,
         string calldata justification
-    ) public {
+    ) public openQuestion {
         require(totalCollateral != 0, 'Contract not open'); // hack to check configuration is done
-        require(question_denominator == 0, "Question answered");
         if (guardQuestionStatus()) return; // finish early
         uint len = indexSets.length;        
         require(distribution.length == len, 'Wrong distribution provided');
@@ -186,10 +187,10 @@ Can initialization and configuration be just one?
         emit UserSetProbability(sender, newPosition, amount, justification);
     }
 
+    // WARNING WIP
     // maybe deprecate this? its failing as it is.. now we have no more roles!
-    function changeTimeOut(uint _timeout) public { // onlyRole(MANAGER_ROLE)
+    function changeTimeOut(uint _timeout) public openQuestion{ // onlyRole(MANAGER_ROLE)
         //require(msg.sender == factory, "Nope");
-        require(question_denominator == 0, 'Question is answered');
         require(_timeout > timeout, 'Wrong value');
         timeout = _timeout;
         emit TimeOutUpdated(_timeout);
