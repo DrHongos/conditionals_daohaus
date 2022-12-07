@@ -35,7 +35,7 @@ contract QuestionsFactory is AccessControl {
     // also thinking about mapping(uint => bytes32) conditions & mapping(bytes32 => Question)
     mapping(uint => Question) public questions; // deprecate this 
     uint public questionsCount;
-    mapping(uint => Distributor) public distributors;
+    mapping(uint => Distributor) public distributors; // change to address => Distributor
     uint public distributorsCount;
 
     event NewQuestionCreated(
@@ -138,6 +138,11 @@ contract QuestionsFactory is AccessControl {
         templates[index] = _newTemplate;
         emit DistributorTemplateChanged(_newTemplate, index);
     }
+    // change after change mapping
+    function changeDistributorTimeout(uint distributor, uint _newTimeout) external onlyRole(MANAGER_ROLE){
+        ISimpleDistributor(distributors[distributor].contract_address).changeTimeOut(_newTimeout);
+    }
+
     ///////////////////////////////////////////////////VIEW FUNCTIONS
     function getDistributorAddress(uint index) external view returns (address) {
         return distributors[index].contract_address;

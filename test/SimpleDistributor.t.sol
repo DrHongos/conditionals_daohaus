@@ -251,11 +251,28 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         vm.expectRevert(bytes("Time is out"));//
         vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
+        vm.expectRevert(bytes('Only moderators can change'));
         vm.prank(alice);
-        ISimpleDistributor(distributor_address).changeTimeOut(defaultTimeOut + 1 days); // careful! this fn is left public
+        ISimpleDistributor(distributor_address).changeTimeOut(defaultTimeOut + 1 days); 
+        // change timeout via a manager
+        factory.grantRole(MANAGER_ROLE, alice);
+        vm.prank(alice);
+        factory.changeDistributorTimeout(0, defaultTimeOut + 1 days); 
         vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
+        // if answered, should revert
+        uint[] memory payout = new uint[](3);
+        payout[0] = 1;
+        payout[1] = 0;
+        payout[2] = 0;
+        vm.prank(oracle);
+        ICT(CT_gnosis).reportPayouts(questionId1, payout);
+        ISimpleDistributor(distributor_address).checkQuestion();
+        vm.expectRevert(bytes('Question answered'));
+        vm.prank(alice);
+        ISimpleDistributor(distributor_address).changeTimeOut(defaultTimeOut + 1 days); 
     }
+    // continue here
     function test_question_answered_notChecked() public {
         vm.prank(alice);
         collateralToken.approve(distributor_address, initialBalance);

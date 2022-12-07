@@ -188,9 +188,8 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
     }
 
     // WARNING WIP
-    // maybe deprecate this? its failing as it is.. now we have no more roles!
-    function changeTimeOut(uint _timeout) public openQuestion{ // onlyRole(MANAGER_ROLE)
-        //require(msg.sender == factory, "Nope");
+    function changeTimeOut(uint _timeout) public openQuestion {
+        require(msg.sender == factory, "Only moderators can change");
         require(_timeout > timeout, 'Wrong value');
         timeout = _timeout;
         emit TimeOutUpdated(_timeout);
