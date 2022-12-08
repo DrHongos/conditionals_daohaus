@@ -15,12 +15,12 @@ contract SimpleDistributorDeployment is Script {
     function run() public {
         vm.startBroadcast();
         SimpleDistributor distributor = new SimpleDistributor();        
-//        QuestionsFactory factory = new QuestionsFactory(CT_GNOSIS); // only on factory deployment
+//        QuestionsFactory factory = new OpinologosFactory(CT_GNOSIS); // only on factory deployment
 //        factory.setTemplate(address(distributor), 0);
 
-        QuestionsFactory(currentFactory).setTemplate(address(distributor), 0);
+        OpinologosFactory(currentFactory).setTemplate(address(distributor), 0);
 
-//        QuestionsFactory(currentFactory).grantRole(CREATOR_ROLE, 0x816a4B059883692F3852E82f343b96B5903b9F03);
+//        OpinologosFactory(currentFactory).grantRole(CREATOR_ROLE, 0x816a4B059883692F3852E82f343b96B5903b9F03);
         vm.stopBroadcast();
     }
 }

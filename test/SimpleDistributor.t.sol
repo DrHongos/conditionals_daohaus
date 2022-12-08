@@ -32,7 +32,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
 
     uint defaultTimeOut = block.timestamp + 1 days;
 
-    QuestionsFactory factory;
+    OpinologosFactory factory;
     SimpleDistributor distributor_template;
     ERC20PresetMinterPauser collateralToken;
 
@@ -46,7 +46,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
     function setUp() public {
         distributor_template = new SimpleDistributor();
         collateralToken = new ERC20PresetMinterPauser("FakeUSD", "FUSD");
-        factory = new QuestionsFactory(CT_gnosis);
+        factory = new OpinologosFactory(CT_gnosis);
         ////////////////// USERS
         vm.label(address(this), "Test Contract");
         vm.label(address(collateralToken), "Token Contract");
@@ -74,14 +74,13 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
         vm.prank(alice);
-        factory.createDistributor(
+        distributor_address = factory.createDistributor(
             rootCollateral,
+            condition_created,
             address(collateralToken),
             indexSets,
-            0, // template index
-            0  // question index
+            0 // template index
         );                 
-        distributor_address = factory.getDistributorAddress(0);
         vm.label(distributor_address, "Distributor");        
     }
 ///////////////////////////////////////////////// HELPERS
@@ -118,12 +117,12 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
             0, 
             0
         );
-        assertEq(ICT(CT_gnosis).getOutcomeSlotCount(factory.getCondition(0)), 3);        
+        bytes32 condition = ICT(CT_gnosis).getConditionId(oracle, questionId1, 3);
         for (uint i=0; i < 3; i++) {
             (bytes32 condition, uint position) = getCollectionAndPosition(
                 address(collateralToken),
-                factory.getParentCollection(0),
-                factory.getCondition(0),
+                factory.getParentCollection(distributor_address),
+                condition,
                 indexSets[i]
             );
             assertEq(ICT(CT_gnosis).balanceOf(distributor_address, position), initial_amount);
@@ -249,7 +248,7 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         vm.stopPrank();
         factory.grantRole(MANAGER_ROLE, alice); // only admin
         vm.startPrank(alice);
-        factory.changeDistributorTimeout(0, defaultTimeOut + 1 days); 
+        factory.changeDistributorTimeout(distributor_address, defaultTimeOut + 1 days); 
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
         // if answered, should revert
         vm.stopPrank();
@@ -503,11 +502,30 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_1), Carol_returnedTokens[1]);
         assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_2), Carol_returnedTokens[2]);        
         //////////////////////////////////////////////// GETTING COLLATERAL
-        bytes32 condition = factory.getCondition(0);
+        bytes32 condition = ICT(CT_gnosis).getConditionId(oracle, questionId1, 3);
         userRedeemsCollateral(alice, condition, indexSets);
         userRedeemsCollateral(bob, condition, indexSets);
         userRedeemsCollateral(carol, condition, indexSets);        
     }
+
+/*     function test_mixed_distributors() public {
+        // create another question, mix w the first and launch a distributor for it
+        bytes32 condition_created_2 = factory.createQuestion(oracle, questionId2, 2);
+        uint[] memory indexSets_2 = new uint[](2);
+        indexSets_2[0] = uint(1); //0b01
+        indexSets_2[1] = uint(2); //0b10       
+        //vm.prank(alice);
+        factory.createDistributor(
+            rootCollateral,
+            address(collateralToken),
+            indexSets_2,
+            0, // template index
+            1  // question index
+        );
+        distributor_address_2 = factory.getDistributorAddress(1);
+                
+
+    } */
 
     function userRedeemsCollateral(address user, bytes32 condition, uint256[] memory indexSets) public {
         vm.prank(user);

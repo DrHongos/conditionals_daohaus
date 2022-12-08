@@ -2,12 +2,9 @@
 pragma solidity ^0.8.2;
 
 // TODO:
-// test user as struct
-// change price to a band of prices         <<
-    // handle relation between amount and returnedTokens
 // Fee (config address + percenteage)       <
 // try to unify initialization + config
-// separate library content
+// try separate library content
 // OTHERS
 // user _should_ redeem collateral directly 
 // 

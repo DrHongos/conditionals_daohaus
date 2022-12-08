@@ -10,8 +10,6 @@ Use the getCode cheatcode to deploy contracts with incompatible Solidity version
 NOTICE: decimals as a constant in the template is NOT replicated in clones.
 
 
-
-
 init conditions:
 conditionId: 0x4150c4c0eb3864b99dd6e9e406760fc00c7b3eec2b29e7996b2265d1a539aa55
 parentCollection: 0x0000000000000000000000000000000000000000000000000000000000000000

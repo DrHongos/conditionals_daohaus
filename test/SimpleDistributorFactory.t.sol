@@ -2,12 +2,11 @@
 pragma solidity ^0.8.0;
 
 import "../interfaces/ICT.sol";
-import "../interfaces/User.sol";
 import "../src/SimpleDistributor.sol";
+import "../interfaces/ISimpleDistributor.sol";
 import "../src/OpinologoFactory.sol";
 import "forge-std/Test.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
-/* import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol"; */
 import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
 contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
@@ -29,9 +28,9 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
     uint defaultTimeOut = block.timestamp + 1 days;
 
     SimpleDistributor distributor;
-    QuestionsFactory factory;
-    User oracle;
-    User alice;
+    OpinologosFactory factory;
+    address oracle;
+    address alice;
     ERC20PresetMinterPauser collateralToken;
 
     struct Question {
@@ -48,15 +47,17 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         vm.label(address(this), "Test Contract");
         collateralToken = new ERC20PresetMinterPauser("FakeUSD", "FUSD");
         vm.label(address(collateralToken), "Token Contract");
-        oracle = new User(address(collateralToken));
+        //oracle = new User(address(collateralToken));
+        oracle = address(0);
         vm.label(address(oracle), "Oracle");
-        alice = new User(address(collateralToken));
+        //alice = new User(address(collateralToken));
+        alice = address(1);
         vm.label(address(alice), "Alice");
         collateralToken.mint(address(this), initialBalance);        
         collateralToken.mint(address(alice), initialBalance);        
         distributor = new SimpleDistributor();
         vm.label(address(distributor), "Distributor template");
-        factory = new QuestionsFactory(CT_gnosis);
+        factory = new OpinologosFactory(CT_gnosis);
         vm.label(address(factory), "Factory");
         factory.grantRole(CREATOR_ROLE, address(this));
     }
@@ -64,9 +65,9 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         assertEq(factory.questionsCount(), 0);
         bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3);
         assertEq(factory.questionsCount(), 1);
-        (bytes32 cond, bytes32 quest, address creator, address _oracle, uint outcomes) = factory.questions(0);
+        (bytes32 cond, bytes32 quest, address creator, address _oracle, uint outcomes) = factory.questions(condition_created);
         assertEq(cond, condition_created);
-        assertEq(_oracle, address(oracle));
+        assertEq(_oracle, oracle);
         assertEq(outcomes, 3);
         assertEq(quest, questionId1);
     } 
@@ -78,23 +79,23 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
         factory.setTemplate(address(distributor), 0);        
-        alice.createDistributor(
-            address(factory),
+        vm.prank(alice);
+        address distributor_address = factory.createDistributor(
             rootCollateral,
+            condition_created,
             address(collateralToken),
             indexSets,
-            0, // template index
-            0  // question index
+            0 // template index
         );
         assertEq(factory.distributorsCount(), 1);
-        (bytes32 collection, address contract_address, address template, uint question_index)
-            = factory.distributors(0);
+        (bytes32 collection, bytes32 question_condition, address template)
+            = factory.distributors(distributor_address);
         assertEq(collection, rootCollateral);
-        assertEq(contract_address, factory.getDistributorAddress(0));
         assertEq(template, factory.templates(0));
-        assertEq(question_index, 0);
-        address distributor_address = factory.getDistributorAddress(0);
-        vm.label(distributor_address, "Distributor");
+        assertEq(question_condition, condition_created);
+        (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes) = factory.questions(question_condition);
+        assertEq(questionId1, questionId);
+//        vm.label(distributor_address, "Distributor");
 //        assertTrue(ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(factory)));
 //        assertTrue(ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
         // not the user! :D
@@ -113,21 +114,20 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
         factory.setTemplate(address(distributor), 0);
-        alice.createDistributor(
-            address(factory),
+        vm.startPrank(alice);        
+        address distributor_address = factory.createDistributor(
             rootCollateral,
+            condition_created,
             address(collateralToken),
             indexSets,
-            0, // template index
-            0  // question index
-        );        
-        address distributor_address = factory.getDistributorAddress(0);
+            0 // template index
+        );
+        //factory.getDistributorAddress(0);
         vm.label(distributor_address, "Distributor");
 //        assertEq(ISimpleDistributor(distributor).status(), 0);
         uint initial_amount = 10000; 
-        alice.approveCollateral(distributor_address, initial_amount);
-        alice.configure(
-            factory.getDistributorAddress(0),
+        collateralToken.approve(distributor_address, initial_amount);
+        ISimpleDistributor(distributor_address).configure(
             initial_amount, //amountToSplit
             1, //timeOut (no limit)
             2, //price

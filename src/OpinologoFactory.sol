@@ -8,20 +8,21 @@ import "../interfaces/ICT.sol";
 import "../interfaces/ISimpleDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
 
 //  TODO
-//  
-contract QuestionsFactory is AccessControl {
+
+
+contract OpinologosFactory is AccessControl {
     bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-    bytes32 public constant CURATOR_ROLE = keccak256("CURATOR_ROLE");
     
     address CT_CONTRACT; // set in constructor
 
     struct Distributor {
         bytes32 collection;
-        address contract_address;
+        bytes32 question_condition;
         address template;
-        uint question_index; // should be questionId
+        // maybe add the positions?
     }
+    mapping(address => Distributor) public distributors;
 
     struct Question {
         bytes32 condition;        
@@ -30,12 +31,10 @@ contract QuestionsFactory is AccessControl {
         address oracle; 
         uint outcomes;
     }
-
+    mapping(bytes32 => Question) public questions;    
+    
     mapping(uint => address) public templates;
-    // also thinking about mapping(uint => bytes32) conditions & mapping(bytes32 => Question)
-    mapping(uint => Question) public questions; // deprecate this 
     uint public questionsCount;
-    mapping(uint => Distributor) public distributors; // change to address => Distributor
     uint public distributorsCount;
 
     event NewQuestionCreated(
@@ -48,23 +47,24 @@ contract QuestionsFactory is AccessControl {
     );
     event DistributorCreated(
         address distributorAddress,
-        uint distributorIndex,
+        bytes32 question_condition, 
         address templateUsed, 
-        uint question_index
+        uint distributorIndex
     );
     event DistributorTemplateChanged(address newTemplate, uint index);
 
     constructor(address _CT_CONTRACT) {
         CT_CONTRACT = _CT_CONTRACT;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(CREATOR_ROLE, msg.sender);
+        _grantRole(MANAGER_ROLE, msg.sender);
     }
 
     ///@dev creates a new condition and stores it
     function createQuestion(
         address _oracle,         // solver of the condition
-        // TODO receive a string and create the bytes32 (so my event can have the cid directly?)
         bytes32 _questionId,     // referrer to the condition (used to store IPFS cid of question data)
-        uint _responses       // number of possible outcomes
+        uint _responses          // number of possible outcomes
     ) public onlyRole(CREATOR_ROLE) returns (bytes32 conditionId) {
         address _creator = msg.sender;
         ICT(CT_CONTRACT).prepareCondition(address(_oracle), _questionId, _responses);
@@ -76,19 +76,18 @@ contract QuestionsFactory is AccessControl {
             oracle: _oracle, 
             outcomes: _responses
         });
-        uint usingIndex = questionsCount;
-        questions[usingIndex] = newQuestion;
+        questions[conditionId] = newQuestion;
         questionsCount++;
-        emit NewQuestionCreated(_oracle, _creator, conditionId, _questionId, _responses, usingIndex);
+        emit NewQuestionCreated(_oracle, _creator, conditionId, _questionId, _responses, questionsCount);
     }
 
 //        onlyRole(CREATOR_ROLE)
     function createDistributor(
         bytes32 _parentCollection, // frontend managed
+        bytes32 _question_condition,  // question condition
         address _collateralToken, // token of the distributor
         uint[] calldata _indexSets, // groups for outcomes
-        uint template_index, // template index
-        uint _question_index  // question index (maybe should be condition)
+        uint template_index // template index
     )
         external
         returns (address newDistributorAddress)
@@ -99,25 +98,17 @@ contract QuestionsFactory is AccessControl {
         require(templateUsed != address(0), "Template empty");
 
         newDistributorAddress = Clones.clone(templateUsed);
-        uint newIndex = distributorsCount;
         Distributor memory newDistributor = Distributor({
             collection: _parentCollection,
-            contract_address: newDistributorAddress,
-            template: templateUsed,
-            question_index: _question_index        
+            question_condition: _question_condition,        
+            template: templateUsed
+            //contract_address: newDistributorAddress,
         });
-        distributors[newIndex] = newDistributor;
+        distributors[newDistributorAddress] = newDistributor;
+
         // TODO: this should be a general implementation of the initialize function
-        /* 
-            collateral,
-            condition,
-            parentCollection,
-            indexes
-            +
-            configs (depends on the template..)
-        */
         ISimpleDistributor(newDistributorAddress).initialize(
-            questions[_question_index].condition,
+            _question_condition,
             _parentCollection,
             _collateralToken,
             _indexSets
@@ -126,9 +117,9 @@ contract QuestionsFactory is AccessControl {
         distributorsCount += 1;
         emit DistributorCreated(
             newDistributorAddress, 
-            newIndex, 
-            templateUsed,             
-            _question_index
+            _question_condition,
+            templateUsed,
+            distributorsCount
         );
     }
     function setTemplate(address _newTemplate, uint index)
@@ -138,20 +129,15 @@ contract QuestionsFactory is AccessControl {
         templates[index] = _newTemplate;
         emit DistributorTemplateChanged(_newTemplate, index);
     }
-    // change after change mapping
-    function changeDistributorTimeout(uint distributor, uint _newTimeout) external onlyRole(MANAGER_ROLE){
-        ISimpleDistributor(distributors[distributor].contract_address).changeTimeOut(_newTimeout);
+    // change interface when normalized
+    function changeDistributorTimeout(address distributor, uint _newTimeout) external onlyRole(MANAGER_ROLE){
+        ISimpleDistributor(distributor).changeTimeOut(_newTimeout);
     }
 
     ///////////////////////////////////////////////////VIEW FUNCTIONS
-    function getDistributorAddress(uint index) external view returns (address) {
-        return distributors[index].contract_address;
+    // candidate to deprecation (only used in tests)
+    function getParentCollection(address dist) external view returns(bytes32) {
+        return distributors[dist].collection;
     }
-    // i dont like this ones, but let's see
-    function getCondition(uint index) external view returns(bytes32) {
-        return questions[index].condition;
-    }
-    function getParentCollection(uint index) external view returns(bytes32) {
-        return distributors[index].collection;
-    }
+
 }
