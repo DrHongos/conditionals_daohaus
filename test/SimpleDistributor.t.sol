@@ -110,9 +110,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
         uint initial_amount = 10000;
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initial_amount);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             initial_amount, 
             0, 
@@ -161,13 +160,11 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(bobPrediction[2]*10, bobPosition[2]);    
     }
     
-    // TODO: lots of testing in here, dissect it to multiple unit tests
     function test_distribution_with_price_update_for_free() public {
         uint initial_amount = 10000;
         uint price_value = 500;
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initial_amount);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             initial_amount, //amountToSplit
             0, //timeOut (no limit)
@@ -178,12 +175,11 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         bobPrediction[0] = uint(2);
         bobPrediction[1] = uint(3);
         bobPrediction[2] = uint(5);
-        vm.prank(bob);
+        vm.stopPrank();
+        vm.startPrank(bob);
         collateralToken.approve(distributor_address, price_value);
-        vm.prank(bob);
         vm.expectRevert(bytes("Price is bigger")); // checks it reverts if it is lower than min price 
         ISimpleDistributor(distributor_address).setProbabilityDistribution(price_value-1, bobPrediction, 'A long string to test storage issues');
-        vm.prank(bob);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(price_value, bobPrediction, 'A long string to test storage issues');
         assertEq(collateralToken.balanceOf(address(bob)), initialBalance - price_value);
         assertEq(ISimpleDistributor(distributor_address).totalCollateral(), price_value + initial_amount);
@@ -191,7 +187,6 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         bobPrediction[0] = uint(1);
         bobPrediction[1] = uint(1);
         bobPrediction[2] = uint(0);
-        vm.prank(bob);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, bobPrediction, 'A long string to test storage issues');
         assertEq(ISimpleDistributor(distributor_address).totalCollateral(), price_value + initial_amount);
         uint[] memory bobPosition = ISimpleDistributor(distributor_address).getUserPosition(bob);
@@ -201,15 +196,15 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
     }
 
     function test_add_funds() public {
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             initialBalance, //amountToSplit
             0, //timeOut (no limit)
             0, //price
             0 //fee
         );
+        vm.stopPrank();
         vm.prank(bob);
         collateralToken.approve(distributor_address, initialBalance);
         assertEq(ISimpleDistributor(distributor_address).totalCollateral(), initialBalance);
@@ -232,9 +227,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         ISimpleDistributor(distributor_address).addFunds(initialBalance);        
     }
     function test_timeOut() public {
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             initialBalance, //amountToSplit
             defaultTimeOut, //timeOut (no limit)
@@ -245,38 +239,35 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
         vm.warp(defaultTimeOut);
         vm.expectRevert(bytes("Time is out"));//
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
         vm.expectRevert(bytes('Only moderators can change'));
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).changeTimeOut(defaultTimeOut + 1 days); 
         // change timeout via a manager
-        factory.grantRole(MANAGER_ROLE, alice);
-        vm.prank(alice);
+        vm.stopPrank();
+        factory.grantRole(MANAGER_ROLE, alice); // only admin
+        vm.startPrank(alice);
         factory.changeDistributorTimeout(0, defaultTimeOut + 1 days); 
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
         // if answered, should revert
+        vm.stopPrank();
         uint[] memory payout = new uint[](3);
         payout[0] = 1;
         payout[1] = 0;
-        payout[2] = 0;
-        vm.prank(oracle);
+        payout[2] = 0;        
+        vm.startPrank(oracle);
         ICT(CT_gnosis).reportPayouts(questionId1, payout);
         ISimpleDistributor(distributor_address).checkQuestion();
+        vm.stopPrank();
         vm.expectRevert(bytes('Question answered'));
         vm.prank(alice);
         ISimpleDistributor(distributor_address).changeTimeOut(defaultTimeOut + 1 days); 
     }
-    // continue here
     function test_question_answered_notChecked() public {
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             initialBalance, //amountToSplit
             defaultTimeOut, //timeOut (no limit)
@@ -287,8 +278,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
+        vm.stopPrank();
         uint[] memory vals = ISimpleDistributor(distributor_address).getUserPosition(alice);
         // answer question
         uint[] memory payout = new uint[](3);
@@ -297,12 +288,12 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         payout[2] = 0;
         vm.prank(oracle);
         ICT(CT_gnosis).reportPayouts(questionId1, payout);
-        uint[] memory aliceNewPrediction = new uint[](3);
-        aliceNewPrediction[0] = uint(1);
-        aliceNewPrediction[1] = uint(0);
-        aliceNewPrediction[2] = uint(0);
+        alicePrediction[0] = uint(1);
+        alicePrediction[1] = uint(0);
+        alicePrediction[2] = uint(0);
         vm.prank(alice);
-        ISimpleDistributor(distributor_address).setProbabilityDistribution(0, aliceNewPrediction, '');
+        ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
+        // below line does not have an effect on alice position (it closes the question)
         // check contract state payout_numerator & denominator
         assertEq(ISimpleDistributor(distributor_address).question_denominator(), 1);
         uint[] memory vals_f = ISimpleDistributor(distributor_address).getUserPosition(alice);
@@ -312,9 +303,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
     }
 
     function test_question_answered_checked() public {
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             initialBalance, //amountToSplit
             defaultTimeOut, //timeOut (no limit)
@@ -325,18 +315,17 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(2);
         alicePrediction[1] = uint(3);
         alicePrediction[2] = uint(5);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
+        vm.stopPrank();
         uint[] memory payout = new uint[](3);
         payout[0] = 1;
         payout[1] = 0;
         payout[2] = 0;
         vm.prank(oracle);
         ICT(CT_gnosis).reportPayouts(questionId1, payout);
-        vm.prank(alice);
+        vm.startPrank(alice);
         ISimpleDistributor(distributor_address).checkQuestion();
         vm.expectRevert(bytes("Question answered"));// reverts but without data
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(0, alicePrediction, '');
         assertEq(ISimpleDistributor(distributor_address).question_denominator(), 1);
     }
@@ -348,9 +337,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         uint positions_0 = ISimpleDistributor(distributor_address).positionIds(0);
         uint positions_1 = ISimpleDistributor(distributor_address).positionIds(1);
         uint positions_2 = ISimpleDistributor(distributor_address).positionIds(2);
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             3, //amountToSplit
             0, //timeOut (no limit)
@@ -362,34 +350,33 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(10);
         alicePrediction[1] = uint(10);
         alicePrediction[2] = uint(30);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(100, alicePrediction, '');
+        vm.stopPrank();
         uint[] memory bobPrediction = new uint[](3);
         bobPrediction[0] = uint(100);
         bobPrediction[1] = uint(300);
         bobPrediction[2] = uint(100);
-        vm.prank(bob);
+        vm.startPrank(bob);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(bob);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(100, bobPrediction, '');
+        vm.stopPrank();
         uint[] memory carolPrediction = new uint[](3);
         carolPrediction[0] = uint(0);
         carolPrediction[1] = uint(2);
         carolPrediction[2] = uint(3);
-        vm.prank(carol);
+        vm.startPrank(carol);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(carol);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(100, carolPrediction, '');
-
+        vm.stopPrank();
         ///////////////////////////////////////////////// ANSWER
         uint[] memory payout = new uint[](3);
         payout[0] = 1;
         payout[1] = 0;
         payout[2] = 0;
-        vm.prank(oracle);
+        vm.startPrank(oracle);
         ICT(CT_gnosis).reportPayouts(questionId1, payout);
-        vm.prank(oracle);
         ISimpleDistributor(distributor_address).checkQuestion();
+        vm.stopPrank();
         //////////////////////////////////////////////// RESULTS
         uint[] memory global = ISimpleDistributor(distributor_address).getProbabilityDistribution();        
         emit log_named_uint("total collateral:", ISimpleDistributor(distributor_address).totalCollateral());
@@ -411,7 +398,6 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         emit log_named_uint("CAROL returned 0:", uint256(Carol_returnedTokens[0]));
         emit log_named_uint("CAROL returned 1:", uint256(Carol_returnedTokens[1]));
         emit log_named_uint("CAROL returned 2:", uint256(Carol_returnedTokens[2]));
-
         //////////////////////////////////////////////// REDEMPTION
         vm.prank(alice);
         ISimpleDistributor(distributor_address).redeem();
@@ -428,7 +414,6 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         assertEq(ICT(CT_gnosis).balanceOf(carol, positions_0), Carol_returnedTokens[0]);
         assertEq(ICT(CT_gnosis).balanceOf(carol, positions_1), Carol_returnedTokens[1]);
         assertEq(ICT(CT_gnosis).balanceOf(carol, positions_2), Carol_returnedTokens[2]);
-
     }
 
     function test_weighted_positions() public {
@@ -439,13 +424,8 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         uint positions_0 = ISimpleDistributor(distributor_address).positionIds(0);
         uint positions_1 = ISimpleDistributor(distributor_address).positionIds(1);
         uint positions_2 = ISimpleDistributor(distributor_address).positionIds(2);
-        vm.prank(alice);
+        vm.startPrank(alice);
         collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(bob);
-        collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(carol);
-        collateralToken.approve(distributor_address, initialBalance);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).configure(
             10, //amountToSplit
             0, //timeOut (no limit)
@@ -457,20 +437,24 @@ contract SimpleDistributorTest is Test, ERC1155Holder {
         alicePrediction[0] = uint(25);
         alicePrediction[1] = uint(75);
         alicePrediction[2] = uint(0);
-        vm.prank(alice);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(100, alicePrediction, '');
+        vm.stopPrank();
+        vm.startPrank(bob);
+        collateralToken.approve(distributor_address, initialBalance);        
         uint[] memory bobPrediction = new uint[](3);
         bobPrediction[0] = uint(25);
         bobPrediction[1] = uint(0);
         bobPrediction[2] = uint(75);
-        vm.prank(bob);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(50, bobPrediction, '');
+        vm.stopPrank();
+        vm.startPrank(carol);
+        collateralToken.approve(distributor_address, initialBalance);        
         uint[] memory carolPrediction = new uint[](3);
         carolPrediction[0] = uint(33);
         carolPrediction[1] = uint(33);
         carolPrediction[2] = uint(33);
-        vm.prank(carol);
         ISimpleDistributor(distributor_address).setProbabilityDistribution(10, carolPrediction, '');
+        vm.stopPrank();
         ///////////////////////////////////////////////// ANSWER
         uint[] memory payout = new uint[](3);
         payout[0] = 1;

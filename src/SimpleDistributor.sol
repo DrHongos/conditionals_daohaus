@@ -41,12 +41,6 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
 
     mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
 
-    // users data
-    //mapping(address => bool) public userSet;    // more like user is active 
-    //mapping(address => uint[]) public probabilityDistribution;  // check its not hackable, limit its top number 
-    //mapping(address => string) public justifiedPositions;       // optional string for user
-
-    // alternative 
     struct UserPosition {
         uint positionSize;                // to handle price band
         uint[] probabilityDistribution;   // position discrimination
@@ -111,9 +105,9 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint _price,
         uint _fee
     ) public {
-        // checks (timeout > now)
-        // amountToSplit > 0
-        // fee < 5% // baseFee + creatorsFee
+        // checks (timeout > now)                   ?
+        // amountToSplit > 0                        ?
+        // fee < 5% // baseFee + creatorsFee        ?
         require(totalCollateral == 0, "Already config");
         price = _price;
         fee = _fee;
@@ -152,7 +146,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         string calldata justification
     ) public openQuestion {
         require(totalCollateral != 0, 'Contract not open'); // hack to check configuration is done
-        if (guardQuestionStatus()) return; // finish early
+        if (guardQuestionStatus()) return;                  // finish early
         uint len = indexSets.length;        
         require(distribution.length == len, 'Wrong distribution provided');
         if (timeout > 0) {
@@ -161,7 +155,7 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         address sender = msg.sender;
         UserPosition storage user = positions[sender];
         uint weight = user.positionSize + amount;           // TODO: handle amount = 0 (for forms templates)
-        require(weight >= price, "Price is bigger"); // checks the price payment done
+        require(weight >= price, "Price is bigger");        // checks the price payment done
         if (amount > 0) {
             addFunds(amount);
         }
@@ -187,7 +181,6 @@ contract SimpleDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit UserSetProbability(sender, newPosition, amount, justification);
     }
 
-    // WARNING WIP
     function changeTimeOut(uint _timeout) public openQuestion {
         require(msg.sender == factory, "Only moderators can change");
         require(_timeout > timeout, 'Wrong value');
