@@ -39,6 +39,7 @@ interface ICT {
         bytes32 conditionId, 
         uint[] calldata indexSets
     ) external;
+    function allowance(address owner, address spender) external view returns (uint256);
     function reportPayouts(bytes32 questionId, uint[] calldata payouts) external;
     function payoutDenominator(bytes32) external view returns (uint);
     function payoutNumerators(bytes32, uint) external view returns (uint); // memory

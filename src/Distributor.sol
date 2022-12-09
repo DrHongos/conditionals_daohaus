@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.2;
 
-// TODO:
-// Fee (config address + percenteage)       <
-// try to unify initialization + config
-// try separate library content
-// OTHERS
-// user _should_ redeem collateral directly 
-// 
+// TODO: Same as the others (fee, redeem,)
 
 import "../interfaces/ICT.sol";
 import "../interfaces/IQuestionFactory.sol";
@@ -17,36 +11,37 @@ import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 
-contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
-    bytes32 public conditionId;
-    bytes32 public parentCollection;
+contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
+    bytes32 public conditionId;         // refers to the question
+    bytes32 public parentCollection;    // refers to the liquidity (root / mixed)
 
-    uint public timeout;              // duplicated? needed to use parent's?
-    uint public price;                // change it to min/max
+    uint public timeout;              // can be uint64
+    uint public price;                // base limit to enter the distributor
     uint public fee;                  // to implement
 
-    // regards direct question
+    // this refers to the direct upward question
     uint public question_denominator; // store it when question is answered & internal boolean for status = redeem
     uint[] public question_numerator; // result of the question, avoiding recurrent internal calls
 
     address public factory;           // factory that creates this
-    uint[] public indexSets;          // To select the positions
+    uint[] public indexSets;          // To select the positions (for 2nd question)
     uint[] public positionIds;        // store the position ids
 
-    IERC20 public collateralToken;    // ERC20 backing the tokens in game
+    address public collateralToken;    // ERC20 backing the tokens in game
     ICT conditionalTokens;            // matrix of conditional tokens
+    uint public totalBalance;      // keeper of the total balance
+
+    mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
 
     struct UserPosition {
         uint positionSize;                // to handle price band
         uint[] probabilityDistribution;   // position discrimination
-        string justifiedPositions;        // this one is expensive and not needed
+        //string justifiedPositions;        // this one is expensive and not needed
     }
     mapping (address => UserPosition) public positions;
-    mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
-    uint public totalCollateral;      // keeper of the total balance
 
-    event MixDistributorInitialized(
-        address collateralToken,
+//        address collateralToken,
+    event DistributorInitialized(
         uint[] indexSets,
         bytes32 condition,
         bytes32 parentCollection
@@ -74,7 +69,7 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         conditionId = _condition;
         parentCollection = _parentCollection;
         indexSets = _indexSets;
-        collateralToken = IERC20(_collateral);
+        collateralToken = _collateral;
         address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce;
         conditionalTokens = ICT(CT_gnosis);
         for (uint i=0; i < _indexSets.length; i++) {
@@ -89,8 +84,8 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
             );
             positionIds.push(positionId);
         }
-        emit MixDistributorInitialized(
-            _collateral,
+        emit DistributorInitialized(
+//            _collateral,
             _indexSets,
             _condition,
             _parentCollection
@@ -105,7 +100,7 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         // checks (timeout > now)                   ?
         // amountToSplit > 0                        ?
         // fee < 5% // baseFee + creatorsFee        ?
-        require(totalCollateral == 0, "Already config");
+        require(totalBalance == 0, "Already config");
         price = _price;
         fee = _fee;
         timeout = _timeout;
@@ -113,23 +108,18 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
     }
 
-    // change this one
     function addFunds(uint amount) public openQuestion {
-        collateralToken.transferFrom(
-            msg.sender,
-            address(this),
-            amount
-        );
-        totalCollateral += amount;
-        collateralToken.approve(address(conditionalTokens), amount);
-        conditionalTokens.splitPosition(
-            collateralToken,
-            parentCollection, 
-            conditionId,
-            indexSets,
-            amount
-        );
-        emit PredictionFunded(msg.sender, amount);
+        totalBalance += amount;
+        address sender = msg.sender;
+        require(conditionalTokens.isApprovedForAll(sender, address(this)), "Insufficient allowance for conditional");
+        uint[] memory amounts = new uint[](positionIds.length); // this should not be repeated
+        for (uint i = 0; i < positionIds.length; i++) {
+            uint bal = conditionalTokens.balanceOf(sender, positionIds[i]);
+            require(bal >= amount, "Insufficient balance of conditional");
+            amounts[i] = amount;
+        }
+        conditionalTokens.safeBatchTransferFrom(sender, address(this), positionIds, amounts, '');
+        emit PredictionFunded(sender, amount);
     }
 
 // alternative to call setProbabilityDistribution to detect a question is answered.. deprecate?
@@ -143,7 +133,7 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint[] calldata distribution,
         string calldata justification
     ) public openQuestion {
-        require(totalCollateral != 0, 'Contract not open'); // hack to check configuration is done
+        require(totalBalance != 0, 'Contract not open'); // hack to check configuration is done
         if (guardQuestionStatus()) return;                  // finish early
         uint len = indexSets.length;        
         require(distribution.length == len, 'Wrong distribution provided');
@@ -157,7 +147,7 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         if (amount > 0) {
             addFunds(amount);
         }
-        user.justifiedPositions = justification;
+        //user.justifiedPositions = justification;
         //---
         uint sum;
         for (uint i = 0; i < len; i++) {
@@ -218,9 +208,9 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit UserRedemption(sender, returnedTokens);
     }
 
-    function getCollateral() public view returns (address) {
+/*     function getCollateral() public view returns (address) {
         return address(collateralToken);
-    }
+    } */
     // gives a live general position (and number of outcomes)
     function getProbabilityDistribution() public view returns (uint[] memory) {
         uint size = indexSets.length;
@@ -236,7 +226,7 @@ contract MixDistributor is Initializable, ERC1155Holder, ReentrancyGuard {
         for (uint i=0; i < indexSets.length; i++) {
             uint weighted = user.probabilityDistribution[i] * user.positionSize; // handle positionSize = 0
             if (weighted != 0) {
-                returnedTokens[i] = (totalCollateral * weighted) / positionsSum[i];
+                returnedTokens[i] = (totalBalance * weighted) / positionsSum[i];
             } else {
                 returnedTokens[i] = 0;
             }

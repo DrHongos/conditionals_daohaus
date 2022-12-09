@@ -6,6 +6,7 @@ import "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICT.sol";
 import "../interfaces/ISimpleDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
+//import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
 
 //  TODO
 
@@ -122,6 +123,7 @@ contract OpinologosFactory is AccessControl {
             distributorsCount
         );
     }
+
     function setTemplate(address _newTemplate, uint index)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
