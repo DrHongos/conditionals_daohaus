@@ -36,7 +36,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     struct UserPosition {
         uint positionSize;                // to handle price band
         uint[] probabilityDistribution;   // position discrimination
-        //string justifiedPositions;        // this one is expensive and not needed
+        string justifiedPositions;        // this one is expensive and not needed
     }
     mapping (address => UserPosition) public positions;
 
@@ -100,7 +100,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         // checks (timeout > now)                   ?
         // amountToSplit > 0                        ?
         // fee < 5% // baseFee + creatorsFee        ?
-        require(totalBalance == 0, "Already config");
+        require(totalBalance == 0, "Already config"); // Obliges to set amountToSplit > 0 (deprecate?)
         price = _price;
         fee = _fee;
         timeout = _timeout;
@@ -129,7 +129,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         string calldata justification
     ) public openQuestion {
         require(totalBalance != 0, 'Contract not open'); // hack to check configuration is done
-        if (guardQuestionStatus()) return;                  // finish early
+        if (guardQuestionStatus()) return;               // finish early
         uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');
         if (timeout > 0) {
@@ -142,7 +142,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         if (amount > 0) {
             addFunds(amount);
         }
-        //user.justifiedPositions = justification;
+        user.justifiedPositions = justification;
         //---
         uint sum;
         for (uint i = 0; i < len; i++) {
@@ -161,7 +161,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         //---
         user.positionSize = weight;
         user.probabilityDistribution = newPosition;
-        emit UserSetProbability(sender, newPosition, amount, justification);
+        emit UserSetProbability(sender, newPosition, weight, justification);
     }
 
     function changeTimeOut(uint _timeout) public openQuestion {
