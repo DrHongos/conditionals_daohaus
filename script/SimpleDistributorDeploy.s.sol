@@ -2,7 +2,7 @@
 pragma solidity ^0.8.2;
 
 import "forge-std/Script.sol";
-import "../src/SimpleDistributor.sol";
+import "../src/Distributor.sol";
 import "../src/OpinologoFactory.sol";
 
 // v1 factory: 0x4B05b21a6b6F12dEcc260d70F15aF2b4B10B0169
@@ -14,7 +14,7 @@ contract SimpleDistributorDeployment is Script {
     address currentFactory = 0x3Ff7dD8a9f71c8208397957eDa1001f48D03eB32;
     function run() public {
         vm.startBroadcast();
-        SimpleDistributor distributor = new SimpleDistributor();        
+        Distributor distributor = new Distributor();        
 //        QuestionsFactory factory = new OpinologosFactory(CT_GNOSIS); // only on factory deployment
 //        factory.setTemplate(address(distributor), 0);
 

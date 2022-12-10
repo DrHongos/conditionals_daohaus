@@ -2,14 +2,14 @@
 pragma solidity ^0.8.0;
 
 import "../interfaces/ICT.sol";
-import "../src/SimpleDistributor.sol";
-import "../interfaces/ISimpleDistributor.sol";
+import "../src/Distributor.sol";
+import "../interfaces/IDistributor.sol";
 import "../src/OpinologoFactory.sol";
 import "forge-std/Test.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
-contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
+contract DistributorFactoryTest is Test, ERC1155Holder {
 
     address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; 
     bytes32 rootCollateral = 0x0000000000000000000000000000000000000000000000000000000000000000; 
@@ -27,7 +27,7 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
 
     uint defaultTimeOut = block.timestamp + 1 days;
 
-    SimpleDistributor distributor;
+    Distributor distributor;
     OpinologosFactory factory;
     address oracle;
     address alice;
@@ -55,7 +55,7 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         vm.label(address(alice), "Alice");
         collateralToken.mint(address(this), initialBalance);        
         collateralToken.mint(address(alice), initialBalance);        
-        distributor = new SimpleDistributor();
+        distributor = new Distributor();
         vm.label(address(distributor), "Distributor template");
         factory = new OpinologosFactory(CT_gnosis);
         vm.label(address(factory), "Factory");
@@ -96,47 +96,55 @@ contract SimpleDistributorFactoryTest is Test, ERC1155Holder {
         (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes) = factory.questions(question_condition);
         assertEq(questionId1, questionId);
 //        vm.label(distributor_address, "Distributor");
-//        assertTrue(ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(factory)));
-//        assertTrue(ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
+//        assertTrue(IDistributor(distributor).hasRole(MANAGER_ROLE, address(factory)));
+//        assertTrue(IDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
         // not the user! :D
         // need to create functions from the factory to grant/revoke roles
         // also to modify stage
-        //assertTrue(ISimpleDistributor(factory.getDistributorAddress(0)).hasRole(DEFAULT_ADMIN_ROLE, address(factory)));
+        //assertTrue(IDistributor(factory.getDistributorAddress(0)).hasRole(DEFAULT_ADMIN_ROLE, address(factory)));
         // fails, so i will test
-        //ISimpleDistributor(distributor).revokeRole(MANAGER_ROLE, address(alice));
-        //assertTrue(!ISimpleDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
+        //IDistributor(distributor).revokeRole(MANAGER_ROLE, address(alice));
+        //assertTrue(!IDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
 
     } 
     function test_createAndInitializeDistributor() public {
-        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3);
+        bytes32 condition1 = factory.createQuestion(address(oracle), questionId1, 3);
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
         factory.setTemplate(address(distributor), 0);
-        vm.startPrank(alice);        
-        address distributor_address = factory.createDistributor(
+        address distributor1 = factory.createDistributor(
             rootCollateral,
-            condition_created,
+            condition1,
             address(collateralToken),
             indexSets,
             0 // template index
         );
-        //factory.getDistributorAddress(0);
-        vm.label(distributor_address, "Distributor");
-//        assertEq(ISimpleDistributor(distributor).status(), 0);
-        uint initial_amount = 10000; 
-        collateralToken.approve(distributor_address, initial_amount);
-        ISimpleDistributor(distributor_address).configure(
-            initial_amount, //amountToSplit
+        vm.label(distributor1, "Distributor for Q1");        
+        // split collateral into the correspondent conditionals
+        vm.startPrank(alice);
+        uint amount = 100;
+        collateralToken.approve(CT_gnosis, amount);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition1, 
+            indexSets, 
+            amount
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+        IDistributor(distributor1).configure(
+            amount,
             1, //timeOut (no limit)
             2, //price
             3 //fee
         );
-//        assertEq(ISimpleDistributor(distributor).status(), 1);
-        assertEq(ISimpleDistributor(distributor_address).price(), 2);
-        assertEq(ISimpleDistributor(distributor_address).fee(), 3);
-        assertEq(ISimpleDistributor(distributor_address).timeout(), 1);
+        vm.stopPrank();        
+
+        assertEq(IDistributor(distributor1).price(), 2);
+        assertEq(IDistributor(distributor1).fee(), 3);
+        assertEq(IDistributor(distributor1).timeout(), 1);
     }
 
 //    function test_creator_prepareNewCondition() public {} // create factoryUser.sol

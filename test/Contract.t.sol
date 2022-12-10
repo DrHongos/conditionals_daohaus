@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "../interfaces/ICT.sol";
-import "../interfaces/User.sol";
+//import "../interfaces/User.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
@@ -28,36 +28,31 @@ contract ContractTest is Test, ERC1155Holder {
 
     uint256 constant PRECISION = 1e18;
     uint initialBalance = 100 * PRECISION;
-    User oracle;
-    User alice;
-    User bob;
-    User carol;
-    User deedee;
+    address oracle = address(0);
+    address alice = address(1);
+    address bob = address(2);
+    address carol = address(3);
+    address deedee = address(4);
     ERC20PresetMinterPauser collateralToken;
     function setUp() public {
         vm.label(address(this), "Test Contract");
         collateralToken = new ERC20PresetMinterPauser("FakeUSD", "FUSD");
         vm.label(address(collateralToken), "Token Contract");
-        oracle = new User(address(collateralToken));
-        vm.label(address(oracle), "Oracle");
-        alice = new User(address(collateralToken));
-        vm.label(address(alice), "Alice");
-        bob = new User(address(collateralToken));
-        vm.label(address(bob), "Bob");
-        carol = new User(address(collateralToken));
-        vm.label(address(carol), "Carol");
-        deedee = new User(address(collateralToken));
-        vm.label(address(deedee), "deedee");
+        vm.label(oracle, "Oracle");
+        vm.label(alice, "Alice");
+        vm.label(bob, "Bob");
+        vm.label(carol, "Carol");
+        vm.label(deedee, "deedee");
         collateralToken.mint(address(this), initialBalance);        
-        collateralToken.mint(address(alice), initialBalance);
-        collateralToken.mint(address(bob), initialBalance);
-        collateralToken.mint(address(carol), initialBalance);
-        collateralToken.mint(address(deedee), initialBalance);
+        collateralToken.mint(alice, initialBalance);
+        collateralToken.mint(bob, initialBalance);
+        collateralToken.mint(carol, initialBalance);
+        collateralToken.mint(deedee, initialBalance);
     }
 
     function prepareNewCondition(bytes32 questionId, uint responses) internal {
-        ICT(CT_gnosis).prepareCondition(address(oracle), questionId, responses);
-        bytes32 conditionId = ICT(CT_gnosis).getConditionId(address(oracle), questionId, responses);
+        ICT(CT_gnosis).prepareCondition(oracle, questionId, responses);
+        bytes32 conditionId = ICT(CT_gnosis).getConditionId(oracle, questionId, responses);
         conditionsIds[questionId] = conditionId;
         emit log_named_bytes32('Condition created', conditionId);
     }
@@ -205,37 +200,40 @@ contract ContractTest is Test, ERC1155Holder {
         payouts[0] = 1;
         payouts[1] = 0;
         payouts[2] = 0;
-        oracle.reportPayouts(
-            CT_gnosis,
+        vm.prank(oracle);
+        ICT(CT_gnosis).reportPayouts(
             questionId1,
             payouts
         );
         emit log_string('Answer set!');
-        uint alicePrevBalance = collateralToken.balanceOf(address(alice));
+        uint alicePrevBalance = collateralToken.balanceOf(alice);
         // redeemPositions and check balances
-        alice.redeemPositions(
-            CT_gnosis,
+        vm.prank(alice);
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken,
             rootCollateral,// parentCollectionId
             conditionsIds[questionId1],
             collectionIndexSet
         );
-        bob.redeemPositions(
-            CT_gnosis,
+        vm.prank(bob);
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken,
             rootCollateral,// parentCollectionId
             conditionsIds[questionId1],
             collectionIndexSet
         );
-        carol.redeemPositions(
-            CT_gnosis,
+        vm.prank(carol);
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken,
             rootCollateral,// parentCollectionId
             conditionsIds[questionId1],
             collectionIndexSet
         );
 
-        assertGt(collateralToken.balanceOf(address(alice)), alicePrevBalance);
-        assertGt(collateralToken.balanceOf(address(bob)), collateralToken.balanceOf(address(alice)));
-        assertGt(collateralToken.balanceOf(address(bob)), collateralToken.balanceOf(address(carol)));
-        assertGt(collateralToken.balanceOf(address(carol)), collateralToken.balanceOf(address(alice)));
+        assertGt(collateralToken.balanceOf(alice), alicePrevBalance);
+        assertGt(collateralToken.balanceOf(bob), collateralToken.balanceOf(alice));
+        assertGt(collateralToken.balanceOf(bob), collateralToken.balanceOf(carol));
+        assertGt(collateralToken.balanceOf(carol), collateralToken.balanceOf(alice));
         
         uint thisBalance = collateralToken.balanceOf(address(this));
         assertEq(thisBalance, initialBalance - amountToSplit);

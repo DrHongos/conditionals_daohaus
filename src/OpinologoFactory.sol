@@ -5,7 +5,7 @@ import "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICT.sol";
-import "../interfaces/ISimpleDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
+import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
 //import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
 
 //  TODO
@@ -108,7 +108,7 @@ contract OpinologosFactory is AccessControl {
         distributors[newDistributorAddress] = newDistributor;
 
         // TODO: this should be a general implementation of the initialize function
-        ISimpleDistributor(newDistributorAddress).initialize(
+        IDistributor(newDistributorAddress).initialize(
             _question_condition,
             _parentCollection,
             _collateralToken,
@@ -133,7 +133,7 @@ contract OpinologosFactory is AccessControl {
     }
     // change interface when normalized
     function changeDistributorTimeout(address distributor, uint _newTimeout) external onlyRole(MANAGER_ROLE){
-        ISimpleDistributor(distributor).changeTimeOut(_newTimeout);
+        IDistributor(distributor).changeTimeOut(_newTimeout);
     }
 
     ///////////////////////////////////////////////////VIEW FUNCTIONS

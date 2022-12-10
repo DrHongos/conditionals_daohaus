@@ -184,7 +184,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         address payable sender = payable(msg.sender); // payable for ERC1155?
         require(question_denominator != 0, 'Redemption is still in the future');
         //
-        UserPosition storage user = positions[sender]; 
+        //UserPosition storage user = positions[sender]; 
         //require(userSet[sender], 'User not registered or already redeemed');        
         //userSet[sender] = false; // maybe a bool "redeemed"
         uint[] memory returnedTokens = getUserRedemption(sender);
