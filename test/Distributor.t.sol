@@ -706,6 +706,182 @@ contract DistributorNewTest is Test, ERC1155Holder {
         assertEq(IDistributor(distributor1).totalBalance(), 2*amount);
     }
 
+    function test_mixed_weighted() public {
+        // we will create a mixed conditional for 
+        // Q1::A[Q2::Hi, Q2::Lo]
+        bytes32 collectionA = ICT(CT_gnosis).getCollectionId(
+            rootCollateral, // from collateral
+            condition1,     // Q1
+            sets1[0]        // A
+        );
+        distributor1 = factory.createDistributor(
+            collectionA,
+            condition2,
+            address(collateralToken),
+            sets2,
+            0 // template index
+        );
+        vm.label(distributor1, "Distributor for Q1::A[Q2::Hi, Q2::Lo]");
+        // split collateral into the correspondent conditionals (Q1[A, B, C])
+        vm.startPrank(alice);
+        uint amount = 100;
+        collateralToken.approve(CT_gnosis, 2*amount);
+        // collateral into Q1[A,B,C]
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition1,
+            sets1, 
+            2*amount
+        );
+        // Q1::A into Q1::A[Hi, Lo]
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            collectionA,
+            condition2,
+            sets2, 
+            2*amount
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+        IDistributor(distributor1).configure(
+            amount,
+            0, //_timeout
+            10, //_price
+            0//_fee
+        );
+        uint[] memory alicePrediction = new uint[](2);
+        alicePrediction[0] = uint(25);
+        alicePrediction[1] = uint(75);
+        IDistributor(distributor1).setProbabilityDistribution(amount, alicePrediction, '');
+        vm.stopPrank();        
+        uint[] memory bobPrediction = new uint[](2);
+        bobPrediction[0] = uint(3);
+        bobPrediction[1] = uint(7);
+        vm.startPrank(bob);
+        collateralToken.approve(CT_gnosis, amount);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition1, 
+            sets1, 
+            50
+        );
+        ICT(CT_gnosis).splitPosition(       // deep split
+            collateralToken, 
+            collectionA, 
+            condition2, 
+            sets2, 
+            50
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+        IDistributor(distributor1).setProbabilityDistribution(50, bobPrediction, 'A long string to test storage issues');
+        vm.stopPrank();
+        // one should come from a different branch Q2::[Hi[A], Lo[A]]
+        vm.startPrank(carol);
+        collateralToken.approve(CT_gnosis, amount);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition2, 
+            sets2, 
+            10//amount
+        );
+        bytes32 collectionHi = ICT(CT_gnosis).getCollectionId(
+            rootCollateral, // from collateral
+            condition2,     // Q2
+            sets2[0]        // Hi
+        );        
+        ICT(CT_gnosis).splitPosition(       // deep split
+            collateralToken, 
+            collectionHi, 
+            condition1, 
+            sets1, 
+            10//amount
+        );
+        bytes32 collectionLo = ICT(CT_gnosis).getCollectionId(
+            rootCollateral, // from collateral
+            condition2,     // Q2
+            sets2[1]        // Lo
+        );
+        ICT(CT_gnosis).splitPosition(       // deep split
+            collateralToken, 
+            collectionLo, 
+            condition1, 
+            sets1, 
+            10//amount
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+        uint[] memory carolPrediction = new uint[](2);
+        carolPrediction[0] = uint(80);
+        carolPrediction[1] = uint(20);
+        IDistributor(distributor1).setProbabilityDistribution(10, carolPrediction, '');
+        vm.stopPrank();
+        ///////////////////////////////////////////////// ANSWER
+        uint[] memory payout1 = new uint[](3);
+        payout1[0] = 1;
+        payout1[1] = 0;
+        payout1[2] = 0;
+        uint[] memory payout2 = new uint[](2);
+        payout2[0] = 1;
+        payout2[1] = 0;
+
+        vm.startPrank(oracle);
+        ICT(CT_gnosis).reportPayouts(questionId1, payout1);
+        ICT(CT_gnosis).reportPayouts(questionId2, payout2);
+        IDistributor(distributor1).checkQuestion();
+        vm.stopPrank();
+        //////////////////////////////////////////////// RESULTS
+        uint[] memory global = IDistributor(distributor1).getProbabilityDistribution();        
+        emit log_named_uint("total collateral:", IDistributor(distributor1).totalBalance());
+        emit log_named_uint("GLOBAL Result 0:", uint256(global[0]));
+        emit log_named_uint("GLOBAL Result 1:", uint256(global[1]));
+        //emit log_named_uint("GLOBAL Result 2:", uint256(global[2]));
+//        emit log_string("PadIsNotLive()");
+        uint[] memory Alice_returnedTokens = IDistributor(distributor1).getUserRedemption(alice);
+        emit log_named_uint("ALICE returned 0:", uint256(Alice_returnedTokens[0]));
+        emit log_named_uint("ALICE returned 1:", uint256(Alice_returnedTokens[1]));
+        //emit log_named_uint("ALICE returned 2:", uint256(Alice_returnedTokens[2]));
+
+        uint[] memory Bob_returnedTokens = IDistributor(distributor1).getUserRedemption(bob);
+        emit log_named_uint("BOB returned 0:", uint256(Bob_returnedTokens[0]));
+        emit log_named_uint("BOB returned 1:", uint256(Bob_returnedTokens[1]));
+//        emit log_named_uint("BOB returned 2:", uint256(Bob_returnedTokens[2]));
+
+        uint[] memory Carol_returnedTokens = IDistributor(distributor1).getUserRedemption(carol);
+        emit log_named_uint("CAROL returned 0:", uint256(Carol_returnedTokens[0]));
+        emit log_named_uint("CAROL returned 1:", uint256(Carol_returnedTokens[1]));
+//        emit log_named_uint("CAROL returned 2:", uint256(Carol_returnedTokens[2]));
+
+        //////////////////////////////////////////////// REDEMPTION
+        vm.prank(alice);
+        IDistributor(distributor1).redeem();
+        uint positions_0 = IDistributor(distributor1).positionIds(0);
+        uint positions_1 = IDistributor(distributor1).positionIds(1);
+//        uint positions_2 = IDistributor(distributor1).positionIds(2);
+
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions_0), Alice_returnedTokens[0]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions_1), Alice_returnedTokens[1]);
+        //assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions_2), Alice_returnedTokens[2]);
+        vm.prank(bob);
+        IDistributor(distributor1).redeem();        
+        assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_0), Bob_returnedTokens[0]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_1), Bob_returnedTokens[1]);
+        //assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_2), Bob_returnedTokens[2]);
+        vm.prank(carol);
+        IDistributor(distributor1).redeem();        
+        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_0), Carol_returnedTokens[0]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_1), Carol_returnedTokens[1]);
+        //assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_2), Carol_returnedTokens[2]);        
+        //////////////////////////////////////////////// GETTING COLLATERAL
+        //bytes32 condition = ICT(CT_gnosis).getConditionId(oracle, questionId1, 3);
+        //userRedeemsCollateral(alice, condition, sets1);
+        //userRedeemsCollateral(bob, condition, sets1);
+        //userRedeemsCollateral(carol, condition, sets1);        
+
+    }
+
+
+
     function userRedeemsCollateral(address user, bytes32 condition, uint256[] memory indexSets) public {
         vm.prank(user);
         ICT(CT_gnosis).redeemPositions(

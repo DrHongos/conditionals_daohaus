@@ -40,8 +40,8 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     }
     mapping (address => UserPosition) public positions;
 
-//        address collateralToken,
     event DistributorInitialized(
+        address collateralToken,
         uint[] indexSets,
         bytes32 condition,
         bytes32 parentCollection
@@ -85,14 +85,14 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             positionIds.push(positionId);
         }
         emit DistributorInitialized(
-//            _collateral,
+            _collateral,
             _indexSets,
             _condition,
             _parentCollection
         );
     }
     function configure(
-        uint _amountToSplit,  // deprecate this 
+        uint _amountToSplit,
         uint _timeout,
         uint _price,
         uint _fee
@@ -112,7 +112,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         totalBalance += amount;
         address sender = msg.sender;
         require(conditionalTokens.isApprovedForAll(sender, address(this)), "Insufficient allowance for conditional");
-        uint[] memory amounts = new uint[](positionIds.length); // this should not be repeated
+        uint[] memory amounts = new uint[](positionIds.length);
         for (uint i = 0; i < positionIds.length; i++) {
             uint bal = conditionalTokens.balanceOf(sender, positionIds[i]);
             require(bal >= amount, "Insufficient balance of conditional");
@@ -120,11 +120,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         }
         conditionalTokens.safeBatchTransferFrom(sender, address(this), positionIds, amounts, '');
         emit PredictionFunded(sender, amount);
-    }
-
-// alternative to call setProbabilityDistribution to detect a question is answered.. deprecate?
-    function checkQuestion() public {
-        guardQuestionStatus();
     }
 
     // users set its position in the distributor, pay the price (if required) and update if existent
@@ -135,7 +130,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     ) public openQuestion {
         require(totalBalance != 0, 'Contract not open'); // hack to check configuration is done
         if (guardQuestionStatus()) return;                  // finish early
-        uint len = indexSets.length;        
+        uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');
         if (timeout > 0) {
             require(block.timestamp < timeout, 'Time is out');
@@ -183,10 +178,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     function redeem() public nonReentrant {
         address payable sender = payable(msg.sender); // payable for ERC1155?
         require(question_denominator != 0, 'Redemption is still in the future');
-        //
-        //UserPosition storage user = positions[sender]; 
-        //require(userSet[sender], 'User not registered or already redeemed');        
-        //userSet[sender] = false; // maybe a bool "redeemed"
         uint[] memory returnedTokens = getUserRedemption(sender);
         IERC1155(address(conditionalTokens)).safeBatchTransferFrom(
             address(this),
@@ -195,22 +186,9 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             returnedTokens,
             '0x'
     );
-
-/* 
-        Note, redeemPositions checks the caller balance and makes the logic to transform to collateral.
-        In case y should control internally the proportional balance and get rid of ERC1155 manipulation (burned when redeemed)
-        study and test better..
- */
-        // redeemPositions(IERC20 collateralToken, bytes32 parentCollectionId, bytes32 conditionId, uint[] calldata indexSets)
-        // call it in behalf of msg.sender or what?
-//        conditionalTokens.redeemPositions(collateralToken, rootCollateral, conditionId, indexSets);
-        // what!? i need to diminish the total results!  ((??? wtf is this comment))
         emit UserRedemption(sender, returnedTokens);
     }
 
-/*     function getCollateral() public view returns (address) {
-        return address(collateralToken);
-    } */
     // gives a live general position (and number of outcomes)
     function getProbabilityDistribution() public view returns (uint[] memory) {
         uint size = indexSets.length;
@@ -236,7 +214,10 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     function getUserPosition(address who) public view returns(uint[] memory) {
         return positions[who].probabilityDistribution;
     }
-
+    // alternative to call setProbabilityDistribution to detect a question is answered.. deprecate?
+    function checkQuestion() public {
+        guardQuestionStatus();
+    }
     function guardQuestionStatus() internal returns(bool) {
         uint root_denominator = conditionalTokens.payoutDenominator(conditionId);
         if(root_denominator != 0) {

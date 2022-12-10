@@ -9,6 +9,15 @@ import "forge-std/Test.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
+
+// TODO: 
+/* 
+    roles
+    configs
+
+*/
+
+
 contract DistributorFactoryTest is Test, ERC1155Holder {
 
     address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; 
@@ -95,17 +104,6 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         assertEq(question_condition, condition_created);
         (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes) = factory.questions(question_condition);
         assertEq(questionId1, questionId);
-//        vm.label(distributor_address, "Distributor");
-//        assertTrue(IDistributor(distributor).hasRole(MANAGER_ROLE, address(factory)));
-//        assertTrue(IDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
-        // not the user! :D
-        // need to create functions from the factory to grant/revoke roles
-        // also to modify stage
-        //assertTrue(IDistributor(factory.getDistributorAddress(0)).hasRole(DEFAULT_ADMIN_ROLE, address(factory)));
-        // fails, so i will test
-        //IDistributor(distributor).revokeRole(MANAGER_ROLE, address(alice));
-        //assertTrue(!IDistributor(distributor).hasRole(MANAGER_ROLE, address(alice)));
-
     } 
     function test_createAndInitializeDistributor() public {
         bytes32 condition1 = factory.createQuestion(address(oracle), questionId1, 3);
