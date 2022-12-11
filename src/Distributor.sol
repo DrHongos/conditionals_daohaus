@@ -4,7 +4,7 @@ pragma solidity ^0.8.2;
 // TODO: Same as the others (fee, redeem,)
 
 import "../interfaces/ICT.sol";
-import "../interfaces/IQuestionFactory.sol";
+import "../interfaces/IFactory.sol";
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
@@ -14,6 +14,7 @@ import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     bytes32 public conditionId;         // refers to the question
     bytes32 public parentCollection;    // refers to the liquidity (root / mixed)
+    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
     uint public timeout;              // can be uint64
     uint public price;                // base limit to enter the distributor
@@ -30,7 +31,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     address public collateralToken;    // ERC20 backing the tokens in game
     ICT conditionalTokens;            // matrix of conditional tokens
     uint public totalBalance;      // keeper of the total balance
-
+    bool config;
     mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
 
     struct UserPosition {
@@ -72,6 +73,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         collateralToken = _collateral;
         address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce;
         conditionalTokens = ICT(CT_gnosis);
+        config = false;
         for (uint i=0; i < _indexSets.length; i++) {
             bytes32 collectionId = conditionalTokens.getCollectionId(
                 _parentCollection,
@@ -97,14 +99,17 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint _price,
         uint _fee
     ) public {
-        // checks (timeout > now)                   ?
-        // amountToSplit > 0                        ?
-        // fee < 5% // baseFee + creatorsFee        ?
-        require(totalBalance == 0, "Already config"); // Obliges to set amountToSplit > 0 (deprecate?)
+        if(_timeout > 0) {
+            require(_timeout > block.timestamp, "Incorrect timeout");
+        }
+        require(!config, "Already config"); // Obliges to set amountToSplit > 0 (deprecate?)
         price = _price;
         fee = _fee;
         timeout = _timeout;
-        addFunds(_amountToSplit);
+        if(_amountToSplit > 0) {
+            addFunds(_amountToSplit);
+        }
+        config = true;
         emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
     }
 
@@ -128,7 +133,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint[] calldata distribution,
         string calldata justification
     ) public openQuestion {
-        require(totalBalance != 0, 'Contract not open'); // hack to check configuration is done
+        require(config, 'Contract not open'); // hack to check configuration is done
         if (guardQuestionStatus()) return;               // finish early
         uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');
@@ -165,7 +170,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     }
 
     function changeTimeOut(uint _timeout) public openQuestion {
-        require(msg.sender == factory, "Only moderators can change");
+        require(IFactory(factory).hasRole(MANAGER_ROLE, msg.sender), "Only moderators can change");
         require(_timeout > timeout, 'Wrong value');
         timeout = _timeout;
         emit TimeOutUpdated(_timeout);

@@ -134,7 +134,7 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         ICT(CT_gnosis).setApprovalForAll(distributor1, true);
         IDistributor(distributor1).configure(
             amount,
-            1, //timeOut (no limit)
+            block.timestamp + 100, //timeOut (no limit)
             2, //price
             3 //fee
         );
@@ -142,7 +142,7 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
 
         assertEq(IDistributor(distributor1).price(), 2);
         assertEq(IDistributor(distributor1).fee(), 3);
-        assertEq(IDistributor(distributor1).timeout(), 1);
+        assertEq(IDistributor(distributor1).timeout(), block.timestamp + 100);
     }
 
 //    function test_creator_prepareNewCondition() public {} // create factoryUser.sol

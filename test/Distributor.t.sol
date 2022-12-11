@@ -12,6 +12,10 @@ import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 
 // TODO
+// finish collateral redeem in test_matrix_libreoffice      DONE
+// add tests to demonstrate that non entered distributors pay if lose 
+    // user gets Q1::[A,B,C] and plays a game like Q1::A[Q2::[Hi, Lo]] but Q1::B wins (his collateral stays the same)
+
 
 contract DistributorNewTest is Test, ERC1155Holder {
 
@@ -384,7 +388,7 @@ contract DistributorNewTest is Test, ERC1155Holder {
         vm.stopPrank();
         factory.grantRole(MANAGER_ROLE, alice); // only admin
         vm.startPrank(alice);
-        factory.changeDistributorTimeout(distributor1, defaultTimeOut + 1 days); // dont like this
+        IDistributor(distributor1).changeTimeOut(defaultTimeOut + 1 days); 
         IDistributor(distributor1).setProbabilityDistribution(0, alicePrediction, '');
         // if answered, should revert
         vm.stopPrank();
@@ -628,9 +632,9 @@ contract DistributorNewTest is Test, ERC1155Holder {
         assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_2), Carol_returnedTokens[2]);        
         //////////////////////////////////////////////// GETTING COLLATERAL
         bytes32 condition = ICT(CT_gnosis).getConditionId(oracle, questionId1, 3);
-        userRedeemsCollateral(alice, condition, sets1);
-        userRedeemsCollateral(bob, condition, sets1);
-        userRedeemsCollateral(carol, condition, sets1);        
+        userRedeemsCollateral(alice, rootCollateral, condition, sets1);
+        userRedeemsCollateral(bob, rootCollateral, condition, sets1);
+        userRedeemsCollateral(carol, rootCollateral, condition, sets1);        
     }
 
     function test_mixed() public {
@@ -724,6 +728,7 @@ contract DistributorNewTest is Test, ERC1155Holder {
 //            0
 //        );   
 //        vm.label(distributor1, "Distributor for Q2::[Hi, Lo]");
+        collateralToken.mint(alice, 100);
         bytes32 collectionHi = ICT(CT_gnosis).getCollectionId(
             rootCollateral, // from collateral
             condition2,     // Q2
@@ -750,19 +755,19 @@ contract DistributorNewTest is Test, ERC1155Holder {
             sets1,
             0 // template index
         );
-        vm.label(distributor2, "Distributor for Q2::Lo[Q1::A, Q1::B, Q1::C]");
+        vm.label(distributor3, "Distributor for Q2::Lo[Q1::A, Q1::B, Q1::C]");
 
         // split collateral into the correspondent conditionals (Q1[A, B, C])
         vm.startPrank(alice);
         uint amount = 100;
-        collateralToken.approve(CT_gnosis, amount + 50);
+        collateralToken.approve(CT_gnosis, initialBalance);
         // collateral into Q1[A,B,C]
         ICT(CT_gnosis).splitPosition(       // shallow split
             collateralToken, 
             rootCollateral, 
             condition2,
             sets2, 
-            amount + 50
+            amount + 1 * PRECISION
         );
         // Q1::A into Q1::A[Hi, Lo]
         ICT(CT_gnosis).splitPosition(       // deep split Hi
@@ -770,17 +775,17 @@ contract DistributorNewTest is Test, ERC1155Holder {
             collectionHi,
             condition1,
             sets1, 
-            amount + 50
+            amount + 1 * PRECISION
         );
         ICT(CT_gnosis).splitPosition(       // deep split Lo
             collateralToken, 
             collectionLo,
             condition1,
             sets1, 
-            amount + 50
+            amount + 1 * PRECISION
         );
         ///////////////// approvals
-  //      ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+//        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
         ICT(CT_gnosis).setApprovalForAll(distributor2, true);
         ICT(CT_gnosis).setApprovalForAll(distributor3, true);
         //////////////// configurations
@@ -812,36 +817,36 @@ contract DistributorNewTest is Test, ERC1155Holder {
         alicePrediction2[0] = uint(25);
         alicePrediction2[1] = uint(25);
         alicePrediction2[2] = uint(50);
-        IDistributor(distributor2).setProbabilityDistribution(50, alicePrediction2, '');
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, alicePrediction2, '');
 
         alicePrediction2[0] = uint(10);
         alicePrediction2[1] = uint(20);
         alicePrediction2[2] = uint(70);
-        IDistributor(distributor3).setProbabilityDistribution(50, alicePrediction2, '');
+        IDistributor(distributor3).setProbabilityDistribution(1 * PRECISION, alicePrediction2, '');
         vm.stopPrank();        
 
         vm.startPrank(bob);
-        collateralToken.approve(CT_gnosis, amount);
+        collateralToken.approve(CT_gnosis, initialBalance);
         ICT(CT_gnosis).splitPosition(       // shallow split
             collateralToken, 
             rootCollateral, 
             condition2, 
             sets2, 
-            30
+            1 * PRECISION
         );
         ICT(CT_gnosis).splitPosition(       // deep split
             collateralToken, 
             collectionHi, 
             condition1, 
             sets1, 
-            30
+            1 * PRECISION
         );
         ICT(CT_gnosis).splitPosition(       // deep split
             collateralToken, 
             collectionLo, 
             condition1, 
             sets1, 
-            30
+            1 * PRECISION
         );
         ICT(CT_gnosis).setApprovalForAll(distributor2, true);
         ICT(CT_gnosis).setApprovalForAll(distributor3, true);
@@ -849,34 +854,34 @@ contract DistributorNewTest is Test, ERC1155Holder {
         bobPrediction[0] = uint(5);
         bobPrediction[1] = uint(3);
         bobPrediction[2] = uint(2);
-        IDistributor(distributor2).setProbabilityDistribution(30, bobPrediction, 'A long string to test storage issues');
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, bobPrediction, 'A long string to test storage issues');
         bobPrediction[0] = uint(6);
         bobPrediction[1] = uint(2);
         bobPrediction[2] = uint(2);
-        IDistributor(distributor3).setProbabilityDistribution(30, bobPrediction, 'A long string to test storage issues');
+        IDistributor(distributor3).setProbabilityDistribution(1 * PRECISION, bobPrediction, 'A long string to test storage issues');
         vm.stopPrank();
         vm.startPrank(carol);
-        collateralToken.approve(CT_gnosis, amount);
+        collateralToken.approve(CT_gnosis, initialBalance);
         ICT(CT_gnosis).splitPosition(       // shallow split
             collateralToken, 
             rootCollateral, 
             condition2, 
             sets2, 
-            10//amount
+            1 * PRECISION
         );
         ICT(CT_gnosis).splitPosition(       // deep split
             collateralToken, 
             collectionHi, 
             condition1, 
             sets1, 
-            10//amount
+            1 * PRECISION//amount
         );
         ICT(CT_gnosis).splitPosition(       // deep split
             collateralToken, 
             collectionLo, 
             condition1, 
             sets1, 
-            10//amount
+            1 * PRECISION//amount
         );
         ICT(CT_gnosis).setApprovalForAll(distributor2, true);
         ICT(CT_gnosis).setApprovalForAll(distributor3, true);
@@ -884,20 +889,20 @@ contract DistributorNewTest is Test, ERC1155Holder {
         carolPrediction[0] = uint(10);
         carolPrediction[1] = uint(80);
         carolPrediction[2] = uint(10);
-        IDistributor(distributor2).setProbabilityDistribution(10, carolPrediction, '');
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, carolPrediction, '');
         carolPrediction[0] = uint(30);
         carolPrediction[1] = uint(40);
         carolPrediction[2] = uint(30);
-        IDistributor(distributor3).setProbabilityDistribution(10, carolPrediction, '');
+        IDistributor(distributor3).setProbabilityDistribution(1 * PRECISION, carolPrediction, '');
         vm.stopPrank();
         ///////////////////////////////////////////////// ANSWER
         uint[] memory payout1 = new uint[](3);
-        payout1[0] = 1;
-        payout1[1] = 0;
-        payout1[2] = 0;
+        payout1[0] = 0; // A
+        payout1[1] = 0; // B
+        payout1[2] = 1; // C
         uint[] memory payout2 = new uint[](2);
-        payout2[0] = 1;
-        payout2[1] = 0;
+        payout2[0] = 0; // Hi
+        payout2[1] = 1; // Lo
 
         vm.startPrank(oracle);
         ICT(CT_gnosis).reportPayouts(questionId1, payout1);
@@ -948,35 +953,70 @@ contract DistributorNewTest is Test, ERC1155Holder {
         emit log_named_uint("CAROL dist 3: 2:", uint256(Carol_returnedTokens2[2]));
 
         //////////////////////////////////////////////// REDEMPTION
-/*
-        vm.prank(alice);
-        IDistributor(distributor2).redeem();
-        uint positions_0 = IDistributor(distributor2).positionIds(0);
-        uint positions_1 = IDistributor(distributor2).positionIds(1);
-//        uint positions_2 = IDistributor(distributor1).positionIds(2);
+        collateralToken.balanceOf(alice);
+        vm.startPrank(alice);
 
-        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions_0), Alice_returnedTokens[0]);
-        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions_1), Alice_returnedTokens[1]);
-        //assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions_2), Alice_returnedTokens[2]);
-        vm.prank(bob);
-        IDistributor(distributor2).redeem();        
-        assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_0), Bob_returnedTokens[0]);
-        assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_1), Bob_returnedTokens[1]);
+        IDistributor(distributor2).redeem();
+        IDistributor(distributor3).redeem();
+
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken, 
+            ICT(CT_gnosis).getCollectionId(rootCollateral, condition2, sets2[0]),//collectionHi, // collectionA 
+            condition1, 
+            sets1   //.join(sets1) (i can pass all in one fn)
+        );
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken, 
+            ICT(CT_gnosis).getCollectionId(rootCollateral, condition2, sets2[1]),//collectionHi, // collectionA 
+            condition1, 
+            sets1   //.join(sets1) (i can pass all in one fn)
+        );
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken, 
+            rootCollateral,//collectionHi, // collectionA 
+            condition2, 
+            sets2   //.join(sets1) (i can pass all in one fn)
+        );
+        collateralToken.balanceOf(alice);
+        vm.stopPrank();
+/*         uint positions2_0 = IDistributor(distributor2).positionIds(0);
+        uint positions2_1 = IDistributor(distributor2).positionIds(1);
+        uint positions2_2 = IDistributor(distributor2).positionIds(2);
+        uint positions3_0 = IDistributor(distributor3).positionIds(0);
+        uint positions3_1 = IDistributor(distributor3).positionIds(1);
+        uint positions3_2 = IDistributor(distributor3).positionIds(2);
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions2_0), Alice_returnedTokens[0]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions2_1), Alice_returnedTokens[1]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions2_2), Alice_returnedTokens[2]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions3_0), Alice_returnedTokens2[0]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions3_1), Alice_returnedTokens2[1]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions3_2), Alice_returnedTokens2[2]); */
+//        vm.prank(bob);
+//        IDistributor(distributor2).redeem();
+//        vm.prank(bob);
+//        IDistributor(distributor3).redeem();        
+//        assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_0), Bob_returnedTokens[0]);
+//        assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_1), Bob_returnedTokens[1]);
         //assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_2), Bob_returnedTokens[2]);
-        vm.prank(carol);
-        IDistributor(distributor2).redeem();        
-        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_0), Carol_returnedTokens[0]);
-        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_1), Carol_returnedTokens[1]);
+//        vm.prank(carol);
+//        IDistributor(distributor2).redeem();
+//        vm.prank(carol);
+//        IDistributor(distributor3).redeem();        
+//        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_0), Carol_returnedTokens[0]);
+//        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_1), Carol_returnedTokens[1]);
         //assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_2), Carol_returnedTokens[2]);        
         //////////////////////////////////////////////// GETTING COLLATERAL
         //bytes32 condition = ICT(CT_gnosis).getConditionId(oracle, questionId1, 3);
-        //userRedeemsCollateral(alice, condition, sets1);
-        //userRedeemsCollateral(bob, condition, sets1);
-        //userRedeemsCollateral(carol, condition, sets1);        
- */
+ 
+        // TODO:
+ 
+        //userRedeemsCollateral(alice, rootCollateral, condition1, sets1);
+        //userRedeemsCollateral(alice, rootCollateral, condition2, sets2);
+        // i am not getting to the last redemption
+
     }
 
-        function test_mixed_weighted() public {
+    function test_mixed_weighted() public {
         // simulation in libreoffice file
         // create also a distributor for Q1[A, B, C]
         distributor1 = factory.createDistributor(
@@ -1171,12 +1211,313 @@ contract DistributorNewTest is Test, ERC1155Holder {
 
     }
 
+    function test_lose_shallow_nonPlayed() public {
+        // simulation of an involved user that enters a deep market (and wins!)
+        // but the shallower condition is wrong so... he DOESNT lose money
+        collateralToken.mint(alice, 100); // compensates the incentives in the distributor
+        bytes32 collectionHi = ICT(CT_gnosis).getCollectionId(
+            rootCollateral, // from collateral
+            condition2,     // Q2
+            sets1[0]        // Hi
+        );
+        distributor2 = factory.createDistributor(
+            collectionHi,
+            condition1,
+            address(collateralToken),
+            sets1,
+            0 // template index
+        );
+        vm.label(distributor2, "Distributor for Q2::Hi[Q1::A, Q1::B, Q1::C]");
+        // split collateral into the correspondent conditionals (Q1[A, B, C])
+        vm.startPrank(alice);
+        uint amount = 100;
+        collateralToken.approve(CT_gnosis, initialBalance);
+        // collateral into Q1[A,B,C]
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition2,
+            sets2, 
+            amount + 1 * PRECISION
+        );
+        // Q1::A into Q1::A[Hi, Lo]
+        ICT(CT_gnosis).splitPosition(       // deep split Hi
+            collateralToken, 
+            collectionHi,
+            condition1,
+            sets1, 
+            amount + 1 * PRECISION
+        );
+        ///////////////// approvals
+        ICT(CT_gnosis).setApprovalForAll(distributor2, true);
+        //////////////// configurations
+        IDistributor(distributor2).configure(
+            amount,
+            0, //_timeout
+            10, //_price
+            0//_fee
+        );
+        /////////////////////// Predictions        
+        uint[] memory alicePrediction2 = new uint[](3);
+        alicePrediction2[0] = uint(10);
+        alicePrediction2[1] = uint(10);
+        alicePrediction2[2] = uint(80);
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, alicePrediction2, '');
+        vm.stopPrank();        
 
-    function userRedeemsCollateral(address user, bytes32 condition, uint256[] memory indexSets) public {
+        vm.startPrank(bob);
+        collateralToken.approve(CT_gnosis, initialBalance);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition2, 
+            sets2, 
+            1 * PRECISION
+        );
+        ICT(CT_gnosis).splitPosition(       // deep split
+            collateralToken, 
+            collectionHi, 
+            condition1, 
+            sets1, 
+            1 * PRECISION
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor2, true);
+        uint[] memory bobPrediction = new uint[](3);
+        bobPrediction[0] = uint(5);
+        bobPrediction[1] = uint(3);
+        bobPrediction[2] = uint(2);
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, bobPrediction, 'A long string to test storage issues');
+        vm.stopPrank();
+        vm.startPrank(carol);
+        collateralToken.approve(CT_gnosis, initialBalance);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition2, 
+            sets2, 
+            1 * PRECISION
+        );
+        ICT(CT_gnosis).splitPosition(       // deep split
+            collateralToken, 
+            collectionHi, 
+            condition1, 
+            sets1, 
+            1 * PRECISION//amount
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor2, true);
+        uint[] memory carolPrediction = new uint[](3);
+        carolPrediction[0] = uint(10);
+        carolPrediction[1] = uint(80);
+        carolPrediction[2] = uint(10);
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, carolPrediction, '');
+        vm.stopPrank();
+        ///////////////////////////////////////////////// ANSWER
+        uint[] memory payout1 = new uint[](3);
+        payout1[0] = 0; // A
+        payout1[1] = 0; // B
+        payout1[2] = 1; // C
+        uint[] memory payout2 = new uint[](2);
+        payout2[0] = 0; // Hi
+        payout2[1] = 1; // Lo
+
+        vm.startPrank(oracle);
+        ICT(CT_gnosis).reportPayouts(questionId1, payout1);
+        ICT(CT_gnosis).reportPayouts(questionId2, payout2);
+        IDistributor(distributor2).checkQuestion();
+        vm.stopPrank();
+        //////////////////////////////////////////////// REDEMPTION
+        collateralToken.balanceOf(alice);
+        vm.startPrank(alice);
+        IDistributor(distributor2).redeem();
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken, 
+            ICT(CT_gnosis).getCollectionId(rootCollateral, condition2, sets2[0]),//collectionHi, // collectionA 
+            condition1, 
+            sets1   //.join(sets1) (i can pass all in one fn)
+        );
+        ICT(CT_gnosis).redeemPositions(
+            collateralToken, 
+            rootCollateral,//collectionHi, // collectionA 
+            condition2, 
+            sets2   //.join(sets1) (i can pass all in one fn)
+        );
+        assertEq(collateralToken.balanceOf(alice), initialBalance + 100);
+        vm.stopPrank();
+    }
+    
+    function test_shallow_and_deep() public {
+        collateralToken.mint(alice, 100); // compensates incentives
+
+        distributor1 = factory.createDistributor(
+            rootCollateral,
+            condition2,
+            address(collateralToken),
+            sets2,
+            0
+        );
+        vm.label(distributor3, "Distributor for Q2::[Hi, Lo]");
+
+        bytes32 collectionHi = ICT(CT_gnosis).getCollectionId(
+            rootCollateral, // from collateral
+            condition2,     // Q2
+            sets1[0]        // Hi
+        );
+        distributor2 = factory.createDistributor(
+            collectionHi,
+            condition1,
+            address(collateralToken),
+            sets1,
+            0 // template index
+        );
+        vm.label(distributor2, "Distributor for Q2::Hi[Q1::A, Q1::B, Q1::C]");
+
+        vm.startPrank(alice);
+        uint amount = 100;
+        collateralToken.approve(CT_gnosis, initialBalance);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition2,
+            sets2, 
+            2*amount + 2 * PRECISION
+        );
+        ICT(CT_gnosis).splitPosition(       // deep split Hi
+            collateralToken, 
+            collectionHi,
+            condition1,
+            sets1, 
+            amount + 1 * PRECISION
+        );
+        ///////////////// approvals
+        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+        ICT(CT_gnosis).setApprovalForAll(distributor2, true);
+        //////////////// configurations
+        IDistributor(distributor1).configure(
+            amount,
+            0, //_timeout
+            10, //_price
+            0//_fee
+        );
+        IDistributor(distributor2).configure(
+            amount,
+            0, //_timeout
+            10, //_price
+            0//_fee
+        );
+        /////////////////////// Predictions
+        uint[] memory alicePrediction1 = new uint[](2);
+        alicePrediction1[0] = uint(25);
+        alicePrediction1[1] = uint(50);
+        IDistributor(distributor1).setProbabilityDistribution(1* PRECISION, alicePrediction1, '');
+        uint[] memory alicePrediction2 = new uint[](3);
+        alicePrediction2[0] = uint(25);
+        alicePrediction2[1] = uint(25);
+        alicePrediction2[2] = uint(50);
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, alicePrediction2, '');
+        vm.stopPrank();        
+
+        vm.startPrank(bob);
+        collateralToken.approve(CT_gnosis, initialBalance);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition2, 
+            sets2, 
+            2 * PRECISION
+        );
+        ICT(CT_gnosis).splitPosition(       // deep split
+            collateralToken, 
+            collectionHi, 
+            condition1, 
+            sets1, 
+            1 * PRECISION
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+        ICT(CT_gnosis).setApprovalForAll(distributor2, true);
+        uint[] memory bobPrediction1 = new uint[](2);
+        bobPrediction1[0] = uint(6);
+        bobPrediction1[1] = uint(2);
+        IDistributor(distributor1).setProbabilityDistribution(1 * PRECISION, bobPrediction1, 'A long string to test storage issues');
+        uint[] memory bobPrediction2 = new uint[](3);
+        bobPrediction2[0] = uint(5);
+        bobPrediction2[1] = uint(3);
+        bobPrediction2[2] = uint(2);
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, bobPrediction2, 'A long string to test storage issues');
+        vm.stopPrank();
+        vm.startPrank(carol);
+        collateralToken.approve(CT_gnosis, initialBalance);
+        ICT(CT_gnosis).splitPosition(       // shallow split
+            collateralToken, 
+            rootCollateral, 
+            condition2, 
+            sets2, 
+            2 * PRECISION
+        );
+        ICT(CT_gnosis).splitPosition(       // deep split
+            collateralToken, 
+            collectionHi, 
+            condition1, 
+            sets1, 
+            1 * PRECISION//amount
+        );
+        ICT(CT_gnosis).setApprovalForAll(distributor1, true);
+        ICT(CT_gnosis).setApprovalForAll(distributor2, true);
+        uint[] memory carolPrediction1 = new uint[](2);
+        carolPrediction1[0] = uint(30);
+        carolPrediction1[1] = uint(40);
+        IDistributor(distributor1).setProbabilityDistribution(1 * PRECISION, carolPrediction1, '');
+        uint[] memory carolPrediction2 = new uint[](3);
+        carolPrediction2[0] = uint(10);
+        carolPrediction2[1] = uint(80);
+        carolPrediction2[2] = uint(10);
+        IDistributor(distributor2).setProbabilityDistribution(1 * PRECISION, carolPrediction2, '');
+        vm.stopPrank();
+        ///////////////////////////////////////////////// ANSWER
+        uint[] memory payout1 = new uint[](3);
+        payout1[0] = 0; // A
+        payout1[1] = 0; // B
+        payout1[2] = 1; // C
+        uint[] memory payout2 = new uint[](2);
+        payout2[0] = 0; // Hi
+        payout2[1] = 1; // Lo
+
+        vm.startPrank(oracle);
+        ICT(CT_gnosis).reportPayouts(questionId1, payout1);
+        ICT(CT_gnosis).reportPayouts(questionId2, payout2);
+        IDistributor(distributor1).checkQuestion();
+        IDistributor(distributor2).checkQuestion();
+        vm.stopPrank();
+        //////////////////////////////////////////////// REDEMPTION
+        collateralToken.balanceOf(alice);
+        vm.startPrank(alice);
+
+        IDistributor(distributor1).redeem();
+        IDistributor(distributor2).redeem();
+
+        ICT(CT_gnosis).redeemPositions(     // to shallow position
+            collateralToken, 
+            ICT(CT_gnosis).getCollectionId(rootCollateral, condition2, sets2[0]),//collectionHi, // collectionA 
+            condition1, 
+            sets1
+        );
+        ICT(CT_gnosis).redeemPositions(     // to collateral
+            collateralToken, 
+            rootCollateral,
+            condition2, 
+            sets2
+        );
+        collateralToken.balanceOf(alice);
+        vm.stopPrank();
+    }
+
+
+
+
+    function userRedeemsCollateral(address user, bytes32 parent, bytes32 condition, uint256[] memory indexSets) public {
         vm.prank(user);
         ICT(CT_gnosis).redeemPositions(
             collateralToken, 
-            rootCollateral, 
+            parent, 
             condition, 
             indexSets
         );
@@ -1184,12 +1525,10 @@ contract DistributorNewTest is Test, ERC1155Holder {
 
 //////////////////////////////////////////////////////////////////////////////////////        
 //
-//          Below tests need to be adapted to new version
 //
 //
 //////////////////////////////////////////////////////////////////////////////////////
 
-    // add fuzz!
 
 
 }

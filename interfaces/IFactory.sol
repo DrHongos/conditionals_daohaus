@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.2;
 
-interface IQuestionFactory {
+interface IFactory {
     function getDistributorAddress(uint index) external view returns(address);
     function getCondition(uint index) external view returns(bytes32);
     function getParentCollection(uint index) external view returns(bytes32);
@@ -12,4 +12,5 @@ interface IQuestionFactory {
         uint template_index, 
         uint _question_index 
     ) external returns (address);
+    function hasRole(bytes32 role, address account) external view returns(bool);
 }

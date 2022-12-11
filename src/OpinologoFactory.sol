@@ -131,10 +131,6 @@ contract OpinologosFactory is AccessControl {
         templates[index] = _newTemplate;
         emit DistributorTemplateChanged(_newTemplate, index);
     }
-    // change interface when normalized
-    function changeDistributorTimeout(address distributor, uint _newTimeout) external onlyRole(MANAGER_ROLE){
-        IDistributor(distributor).changeTimeOut(_newTimeout);
-    }
 
     ///////////////////////////////////////////////////VIEW FUNCTIONS
     // candidate to deprecation (only used in tests)
