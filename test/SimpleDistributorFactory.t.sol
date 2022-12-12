@@ -93,6 +93,7 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
             rootCollateral,
             condition_created,
             address(collateralToken),
+            0,
             indexSets,
             0 // template index
         );
@@ -116,6 +117,7 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
             rootCollateral,
             condition1,
             address(collateralToken),
+            block.timestamp + 100,
             indexSets,
             0 // template index
         );
@@ -132,16 +134,8 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
             amount
         );
         ICT(CT_gnosis).setApprovalForAll(distributor1, true);
-        IDistributor(distributor1).configure(
-            amount,
-            block.timestamp + 100, //timeOut (no limit)
-            2, //price
-            3 //fee
-        );
         vm.stopPrank();        
 
-        assertEq(IDistributor(distributor1).price(), 2);
-        assertEq(IDistributor(distributor1).fee(), 3);
         assertEq(IDistributor(distributor1).timeout(), block.timestamp + 100);
     }
 

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.2;
 
-// TODO: Same as the others (fee)
+// TODO: Same as the others (fee logic)
+// deprecating price system (minimum entry)
 
 import "../interfaces/ICT.sol";
 import "../interfaces/IFactory.sol";
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
@@ -17,7 +17,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
     uint public timeout;              // can be uint64
-    uint public price;                // base limit to enter the distributor
     uint public fee;                  // to implement
 
     // this refers to the direct upward question
@@ -31,7 +30,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     address public collateralToken;   // ERC20 backing the tokens in game
     ICT conditionalTokens;            // matrix of conditional tokens
     uint public totalBalance;         // keeper of the total balance
-    bool config;                      // distributor is configures and ready to use
     mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
 
     struct UserPosition {
@@ -45,9 +43,9 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         address collateralToken,
         uint[] indexSets,
         bytes32 condition,
-        bytes32 parentCollection
+        bytes32 parentCollection,
+        uint timeout
     );
-    event DistributorStarted(uint initial_amount, uint timeout, uint price, uint fee);
     event UserSetProbability(address who, uint[] userDistribution, uint amount, string justification);
     event UserRedemption(address who, uint[] redemption);
     event DistributorFunded(address who, uint amount);
@@ -64,6 +62,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         bytes32 _condition,
         bytes32 _parentCollection,
         address _collateral,
+        uint _timeout,
         uint[] calldata _indexSets
     ) initializer public {
         factory = msg.sender;
@@ -73,7 +72,8 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         collateralToken = _collateral;
         address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce;
         conditionalTokens = ICT(CT_gnosis);
-        config = false;
+        timeout = _timeout;
+        fee = IFactory(factory).fee();
         for (uint i=0; i < _indexSets.length; i++) {
             bytes32 collectionId = conditionalTokens.getCollectionId(
                 _parentCollection,
@@ -90,27 +90,9 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             _collateral,
             _indexSets,
             _condition,
-            _parentCollection
+            _parentCollection,
+            _timeout
         );
-    }
-    function configure(
-        uint _amountToSplit,  // can be replace by a direct call to addFunds()
-        uint _timeout,        // can be introduced on initialization
-        uint _price,          // can be constant and|or read from factory 
-        uint _fee             // can be constant and|or read from factory
-    ) public {
-        if(_timeout > 0) {
-            require(_timeout > block.timestamp, "Incorrect timeout");
-        }
-        require(!config, "Already config"); // Obliges to set amountToSplit > 0 (deprecate?)
-        price = _price;
-        fee = _fee;
-        timeout = _timeout;
-        if(_amountToSplit > 0) {
-            addFunds(_amountToSplit);
-        }
-        config = true;         // if deprecated, will dissapear
-        emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
     }
 
     function addFunds(uint amount) public openQuestion {
@@ -133,7 +115,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint[] calldata distribution,
         string calldata justification
     ) public openQuestion {
-        require(config, 'Contract not open'); // hack to check configuration is done
+        //require(config, 'Contract not open'); // hack to check configuration is done
         if (guardQuestionStatus()) return;               // finish early
         uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');
@@ -143,7 +125,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         address sender = msg.sender;
         UserPosition storage user = positions[sender];
         uint weight = user.positionSize + amount;           // TODO: handle amount = 0 (for forms templates)
-        require(weight >= price, "Price is bigger");        // checks the price payment done
+        //require(weight >= price, "Price is bigger");        // checks the price payment done (deprecated)
         if (amount > 0) {
             addFunds(amount);
         }
@@ -177,7 +159,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     }
 /////////////////////////////////////////////////////
     function redeem() public nonReentrant {
-        address payable sender = payable(msg.sender); // payable for ERC1155?
+        address payable sender = payable(msg.sender);
         require(question_denominator != 0, 'Redemption is still in the future');
         uint[] memory returnedTokens = getUserRedemption(sender);
         IERC1155(address(conditionalTokens)).safeBatchTransferFrom(
@@ -186,7 +168,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             positionIds,
             returnedTokens,
             '0x'
-    );
+        );
         emit UserRedemption(sender, returnedTokens);
     }
 

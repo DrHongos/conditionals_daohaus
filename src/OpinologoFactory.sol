@@ -15,7 +15,7 @@ contract OpinologosFactory is AccessControl {
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     
     address CT_CONTRACT; // set in constructor
-
+    uint public fee;
     struct Distributor {
         bytes32 collection;
         bytes32 question_condition;
@@ -49,11 +49,13 @@ contract OpinologosFactory is AccessControl {
         bytes32 parentCollection,
         bytes32 question_condition, 
         address distributorAddress,
-        address collateralToken,        
+        address collateralToken,
+        uint timeout,        
         address templateUsed, 
         uint[] indexSets
     );
     event DistributorTemplateChanged(address newTemplate, uint index);
+    event FeeUpdated(uint _newFee);
 
     constructor(address _CT_CONTRACT) {
         CT_CONTRACT = _CT_CONTRACT;
@@ -88,6 +90,7 @@ contract OpinologosFactory is AccessControl {
         bytes32 _parentCollection, // collection to play with
         bytes32 _question_condition,  // question condition
         address _collateralToken, // token of the parent collection
+        uint _timeout,
         uint[] calldata _indexSets, // groups for outcomes
         uint template_index // template index
     )
@@ -113,6 +116,7 @@ contract OpinologosFactory is AccessControl {
             _question_condition,
             _parentCollection,
             _collateralToken,
+            _timeout,
             _indexSets
         );
 
@@ -122,6 +126,7 @@ contract OpinologosFactory is AccessControl {
             _question_condition,
             newDistributorAddress, 
             _collateralToken,
+            _timeout,
             templateUsed,
             _indexSets
         );
@@ -134,7 +139,10 @@ contract OpinologosFactory is AccessControl {
         templates[index] = _newTemplate;
         emit DistributorTemplateChanged(_newTemplate, index);
     }
-
+    function setFee(uint _newFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        fee = _newFee;
+        emit FeeUpdated(_newFee);
+    }
     ///////////////////////////////////////////////////VIEW FUNCTIONS
     // candidate to deprecation (only used in tests)
     function getParentCollection(address dist) external view returns(bytes32) {

@@ -13,4 +13,5 @@ interface IFactory {
         uint _question_index 
     ) external returns (address);
     function hasRole(bytes32 role, address account) external view returns(bool);
+    function fee() external view returns(uint);
 }
