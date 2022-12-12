@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.2;
 
-// TODO: Same as the others (fee, redeem,)
+// TODO: Same as the others (fee)
 
 import "../interfaces/ICT.sol";
 import "../interfaces/IFactory.sol";
@@ -25,13 +25,13 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     uint[] public question_numerator; // result of the question, avoiding recurrent internal calls
 
     address public factory;           // factory that creates this
-    uint[] public indexSets;          // To select the positions (for 2nd question)
+    uint[] public indexSets;          // To select the positions
     uint[] public positionIds;        // store the position ids
 
-    address public collateralToken;    // ERC20 backing the tokens in game
+    address public collateralToken;   // ERC20 backing the tokens in game
     ICT conditionalTokens;            // matrix of conditional tokens
-    uint public totalBalance;      // keeper of the total balance
-    bool config;
+    uint public totalBalance;         // keeper of the total balance
+    bool config;                      // distributor is configures and ready to use
     mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
 
     struct UserPosition {
@@ -50,7 +50,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     event DistributorStarted(uint initial_amount, uint timeout, uint price, uint fee);
     event UserSetProbability(address who, uint[] userDistribution, uint amount, string justification);
     event UserRedemption(address who, uint[] redemption);
-    event PredictionFunded(address who, uint amount);
+    event DistributorFunded(address who, uint amount);
     event TimeOutUpdated(uint timeout);
 
     modifier openQuestion() {
@@ -94,10 +94,10 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         );
     }
     function configure(
-        uint _amountToSplit,
-        uint _timeout,
-        uint _price,
-        uint _fee
+        uint _amountToSplit,  // can be replace by a direct call to addFunds()
+        uint _timeout,        // can be introduced on initialization
+        uint _price,          // can be constant and|or read from factory 
+        uint _fee             // can be constant and|or read from factory
     ) public {
         if(_timeout > 0) {
             require(_timeout > block.timestamp, "Incorrect timeout");
@@ -109,7 +109,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         if(_amountToSplit > 0) {
             addFunds(_amountToSplit);
         }
-        config = true;
+        config = true;         // if deprecated, will dissapear
         emit DistributorStarted(_amountToSplit, _timeout, _price, _fee);
     }
 
@@ -124,7 +124,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             amounts[i] = amount;
         }
         conditionalTokens.safeBatchTransferFrom(sender, address(this), positionIds, amounts, '');
-        emit PredictionFunded(sender, amount);
+        emit DistributorFunded(sender, amount);
     }
 
     // users set its position in the distributor, pay the price (if required) and update if existent
@@ -154,7 +154,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             sum += distribution[i];
         }
         require(sum > 0, "At least one value");
-        uint[] memory newPosition = new uint[](len);                
+        uint[] memory newPosition = new uint[](len);
         for (uint i = 0; i < len; i++) {
             uint value = distribution[i] * 100 / sum;
             newPosition[i] = value;
@@ -176,10 +176,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit TimeOutUpdated(_timeout);
     }
 /////////////////////////////////////////////////////
-
-    // TODO: 
-    // redeem should call CT and return collateral directly, 
-    // 2 steps to do so its bad UX, but for the moment..
     function redeem() public nonReentrant {
         address payable sender = payable(msg.sender); // payable for ERC1155?
         require(question_denominator != 0, 'Redemption is still in the future');
@@ -210,6 +206,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             uint weighted = user.probabilityDistribution[i] * user.positionSize; // handle positionSize = 0
             if (weighted != 0) {
                 returnedTokens[i] = (totalBalance * weighted) / positionsSum[i];
+                // positionsSum[i] cannot be zero while weighted != 0
             } else {
                 returnedTokens[i] = 0;
             }

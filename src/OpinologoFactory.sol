@@ -5,8 +5,7 @@ import "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICT.sol";
-import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
-//import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates (?)
+import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates
 
 //  TODO
 
@@ -47,10 +46,12 @@ contract OpinologosFactory is AccessControl {
         uint index
     );
     event DistributorCreated(
-        address distributorAddress,
+        bytes32 parentCollection,
         bytes32 question_condition, 
+        address distributorAddress,
+        address collateralToken,        
         address templateUsed, 
-        uint distributorIndex
+        uint[] indexSets
     );
     event DistributorTemplateChanged(address newTemplate, uint index);
 
@@ -84,9 +85,9 @@ contract OpinologosFactory is AccessControl {
 
 //        onlyRole(CREATOR_ROLE)
     function createDistributor(
-        bytes32 _parentCollection, // frontend managed
+        bytes32 _parentCollection, // collection to play with
         bytes32 _question_condition,  // question condition
-        address _collateralToken, // token of the distributor
+        address _collateralToken, // token of the parent collection
         uint[] calldata _indexSets, // groups for outcomes
         uint template_index // template index
     )
@@ -117,10 +118,12 @@ contract OpinologosFactory is AccessControl {
 
         distributorsCount += 1;
         emit DistributorCreated(
-            newDistributorAddress, 
+            _parentCollection,
             _question_condition,
+            newDistributorAddress, 
+            _collateralToken,
             templateUsed,
-            distributorsCount
+            _indexSets
         );
     }
 
