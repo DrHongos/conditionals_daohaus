@@ -70,7 +70,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         parentCollection = _parentCollection;
         indexSets = _indexSets;
         collateralToken = _collateral;
-        address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce;
+        address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; // gnosis chain CT contract
         conditionalTokens = ICT(CT_gnosis);
         timeout = _timeout;
         fee = IFactory(factory).fee();
@@ -151,13 +151,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit UserSetProbability(sender, newPosition, weight, justification);
     }
 
-    function changeTimeOut(uint _timeout) public openQuestion {
-        require(IFactory(factory).hasRole(MANAGER_ROLE, msg.sender), "Only moderators can change");
-        require(_timeout > timeout, 'Wrong value');
-        timeout = _timeout;
-        emit TimeOutUpdated(_timeout);
-    }
-/////////////////////////////////////////////////////
     function redeem() public nonReentrant {
         address payable sender = payable(msg.sender);
         require(question_denominator != 0, 'Redemption is still in the future');
@@ -172,6 +165,27 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit UserRedemption(sender, returnedTokens);
     }
 
+    function changeTimeOut(uint _timeout) public openQuestion {
+        require(IFactory(factory).hasRole(MANAGER_ROLE, msg.sender), "Only moderators can change");
+        require(_timeout > timeout, 'Wrong value');
+        timeout = _timeout;
+        emit TimeOutUpdated(_timeout);
+    }
+    // alternative to call setProbabilityDistribution to detect a question is answered.. deprecate?
+    function checkQuestion() public {
+        guardQuestionStatus();
+    }
+    function guardQuestionStatus() internal returns(bool) {
+        uint root_denominator = conditionalTokens.payoutDenominator(conditionId);
+        if(root_denominator != 0) {
+            question_denominator = root_denominator;
+            for (uint i = 0; i < indexSets.length; i++) {// can be unsafe
+                question_numerator.push(conditionalTokens.payoutNumerators(conditionId, i));
+            }
+            return true;
+        } else return false;
+    }
+/////////////////////////////////////////////////// VIEW FUNCTIONS
     // gives a live general position (and number of outcomes)
     function getProbabilityDistribution() public view returns (uint[] memory) {
         uint size = indexSets.length;
@@ -198,20 +212,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     function getUserPosition(address who) public view returns(uint[] memory) {
         return positions[who].probabilityDistribution;
     }
-    // alternative to call setProbabilityDistribution to detect a question is answered.. deprecate?
-    function checkQuestion() public {
-        guardQuestionStatus();
-    }
-    function guardQuestionStatus() internal returns(bool) {
-        uint root_denominator = conditionalTokens.payoutDenominator(conditionId);
-        if(root_denominator != 0) {
-            question_denominator = root_denominator;
-            for (uint i = 0; i < indexSets.length; i++) {// can be unsafe
-                question_numerator.push(conditionalTokens.payoutNumerators(conditionId, i));
-            }
-            return true;
-        } else return false;
-    }
+
     ///@dev support interface should concatenate all supported interfaces
     function supportsInterface(bytes4 interfaceId)
         public
