@@ -14,7 +14,7 @@ interface IDistributor {
         bytes32 condition,
         bytes32 parentCollection,
         address collateral,
-        uint timeout,
+//        uint timeout,
         uint[] calldata indexSets
     ) external;
     function checkQuestion() external;

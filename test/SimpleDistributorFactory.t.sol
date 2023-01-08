@@ -72,9 +72,9 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
     }
     function test_prepareNewCondition() public {
         assertEq(factory.questionsCount(), 0);
-        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3);
+        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3, 0);
         assertEq(factory.questionsCount(), 1);
-        (bytes32 cond, bytes32 quest, address creator, address _oracle, uint outcomes) = factory.questions(condition_created);
+        (bytes32 cond, bytes32 quest, address creator, address _oracle, uint outcomes, uint timeout) = factory.questions(condition_created);
         assertEq(cond, condition_created);
         assertEq(_oracle, oracle);
         assertEq(outcomes, 3);
@@ -82,18 +82,20 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
     } 
     function test_createDistributor() public {
         assertEq(factory.distributorsCount(), 0);
-        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3);
+        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3, 0);
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
         factory.setTemplate(address(distributor), 0);        
         vm.prank(alice);
+
         address distributor_address = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition_created,
             address(collateralToken),
-            0,
             indexSets,
             0 // template index
         );
@@ -103,11 +105,44 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         assertEq(collection, rootCollateral);
         assertEq(template, factory.templates(0));
         assertEq(question_condition, condition_created);
-        (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes) = factory.questions(question_condition);
+        (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes, uint timeout) = factory.questions(question_condition);
         assertEq(questionId1, questionId);
     } 
+    function test_distributor_cannot_be_repeated() public {
+        assertEq(factory.distributorsCount(), 0);
+        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3, 0);
+        uint[] memory indexSets = new uint[](3);
+        indexSets[0] = uint(1); //0b001        
+        indexSets[1] = uint(2); //0b010       
+        indexSets[2] = uint(4); //0b100
+        factory.setTemplate(address(distributor), 0);        
+        vm.prank(alice);
+
+        address distributor_address = factory.createDistributor(
+            rootCollateral,
+            rootCollateral,
+            0,
+            condition_created,
+            address(collateralToken),
+            indexSets,
+            0 // template index
+        );
+        vm.expectRevert(bytes('Distributor already exists'));
+        vm.prank(alice);
+        factory.createDistributor(
+            rootCollateral,
+            rootCollateral,
+            0,
+            condition_created,
+            address(collateralToken),
+            indexSets,
+            0 // template index
+        );
+        assertEq(factory.distributorsCount(), 1);
+    } 
     function test_createAndInitializeDistributor() public {
-        bytes32 condition1 = factory.createQuestion(address(oracle), questionId1, 3);
+        bytes32 condition1 = factory.createQuestion(address(oracle), questionId1, 3, block.timestamp + 100);
+        assertEq(factory.getTimeout(condition1), block.timestamp + 100);
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
@@ -115,9 +150,10 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         factory.setTemplate(address(distributor), 0);
         address distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            block.timestamp + 100,
             indexSets,
             0 // template index
         );
@@ -136,7 +172,6 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         ICT(CT_gnosis).setApprovalForAll(distributor1, true);
         vm.stopPrank();        
 
-        assertEq(IDistributor(distributor1).timeout(), block.timestamp + 100);
     }
 
 //    function test_creator_prepareNewCondition() public {} // create factoryUser.sol

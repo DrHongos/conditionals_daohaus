@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.2;
 
-// TODO: Same as the others (fee logic)
-// deprecating price system (minimum entry)
+// TODO: fee logic
 
 import "../interfaces/ICT.sol";
 import "../interfaces/IFactory.sol";
@@ -16,7 +15,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     bytes32 public parentCollection;    // refers to the liquidity (root / mixed)
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
-    uint public timeout;              // can be uint64
     uint public fee;                  // to implement
 
     // this refers to the direct upward question
@@ -31,25 +29,22 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     ICT conditionalTokens;            // matrix of conditional tokens
     uint public totalBalance;         // keeper of the total balance
     mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
-
     struct UserPosition {
         uint positionSize;                // to handle price band
         uint[] probabilityDistribution;   // position discrimination
         string justifiedPositions;        // this one is expensive and not needed
     }
     mapping (address => UserPosition) public positions;
+    mapping(address => bool) public redeemed;
 
     event DistributorInitialized(
         address collateralToken,
-        uint[] indexSets,
         bytes32 condition,
-        bytes32 parentCollection,
-        uint timeout
+        bytes32 parentCollection
     );
     event UserSetProbability(address who, uint[] userDistribution, uint amount, string justification);
     event UserRedemption(address who, uint[] redemption);
     event DistributorFunded(address who, uint amount);
-    event TimeOutUpdated(uint timeout);
 
     modifier openQuestion() {
         require(question_denominator == 0, "Question answered");
@@ -62,7 +57,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         bytes32 _condition,
         bytes32 _parentCollection,
         address _collateral,
-        uint _timeout,
         uint[] calldata _indexSets
     ) initializer public {
         factory = msg.sender;
@@ -72,7 +66,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         collateralToken = _collateral;
         address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; // gnosis chain CT contract
         conditionalTokens = ICT(CT_gnosis);
-        timeout = _timeout;
         fee = IFactory(factory).fee();
         for (uint i=0; i < _indexSets.length; i++) {
             bytes32 collectionId = conditionalTokens.getCollectionId(
@@ -88,10 +81,8 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         }
         emit DistributorInitialized(
             _collateral,
-            _indexSets,
             _condition,
-            _parentCollection,
-            _timeout
+            _parentCollection
         );
     }
 
@@ -115,17 +106,16 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint[] calldata distribution,
         string calldata justification
     ) public openQuestion {
-        //require(config, 'Contract not open'); // hack to check configuration is done
         if (guardQuestionStatus()) return;               // finish early
         uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');
+        uint timeout = IFactory(factory).getTimeout(conditionId);
         if (timeout > 0) {
             require(block.timestamp < timeout, 'Time is out');
         }
         address sender = msg.sender;
         UserPosition storage user = positions[sender];
         uint weight = user.positionSize + amount;           // TODO: handle amount = 0 (for forms templates)
-        //require(weight >= price, "Price is bigger");        // checks the price payment done (deprecated)
         if (amount > 0) {
             addFunds(amount);
         }
@@ -154,7 +144,9 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     function redeem() public nonReentrant {
         address payable sender = payable(msg.sender);
         require(question_denominator != 0, 'Redemption is still in the future');
+        require(!redeemed[msg.sender], 'Done');
         uint[] memory returnedTokens = getUserRedemption(sender);
+        redeemed[msg.sender] = true;
         IERC1155(address(conditionalTokens)).safeBatchTransferFrom(
             address(this),
             sender,
@@ -165,12 +157,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit UserRedemption(sender, returnedTokens);
     }
 
-    function changeTimeOut(uint _timeout) public openQuestion {
-        require(IFactory(factory).hasRole(MANAGER_ROLE, msg.sender), "Only moderators can change");
-        require(_timeout > timeout, 'Wrong value');
-        timeout = _timeout;
-        emit TimeOutUpdated(_timeout);
-    }
     // alternative to call setProbabilityDistribution to detect a question is answered.. deprecate?
     function checkQuestion() public {
         guardQuestionStatus();

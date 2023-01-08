@@ -80,16 +80,16 @@ contract DistributorNewTest is Test, ERC1155Holder {
         //////////////////
         factory.setTemplate(address(distributor_template), 0);
         factory.grantRole(CREATOR_ROLE, address(this));
-        condition1 = factory.createQuestion(oracle, questionId1, 3);
+        condition1 = factory.createQuestion(oracle, questionId1, 3, 0);
         sets1[0] = uint(1); //0b001        
         sets1[1] = uint(2); //0b010       
         sets1[2] = uint(4); //0b100
 
-        condition2 = factory.createQuestion(oracle, questionId2, 2);
+        condition2 = factory.createQuestion(oracle, questionId2, 2, 0);
         sets2[0] = uint(1); //0b001        
         sets2[1] = uint(2); //0b010       
 
-        condition3 = factory.createQuestion(oracle, questionId3, 3);
+        condition3 = factory.createQuestion(oracle, questionId3, 3, 0);
         sets3[0] = uint(1); //0b001        
         sets3[1] = uint(2); //0b010       
         sets3[2] = uint(4); //0b100
@@ -119,12 +119,16 @@ contract DistributorNewTest is Test, ERC1155Holder {
     function test_configuration_initial_balance() public {
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            0, //timeout
             sets1,
             0 // template index
         );
+        (bytes32 pc, bytes32 c, address t) = factory.distributors(address(distributor1));
+        assertEq(pc, rootCollateral);
+        assertEq(c, condition1);
         vm.label(distributor1, "Distributor for Q1");        
         // split collateral into the correspondent conditionals
         vm.startPrank(alice);
@@ -169,9 +173,10 @@ contract DistributorNewTest is Test, ERC1155Holder {
     function test_user_can_set_distribution() public {
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            0, // timeout
             sets1,
             0 // template index
         );
@@ -216,9 +221,10 @@ contract DistributorNewTest is Test, ERC1155Holder {
     function test_add_funds() public {
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0 // template index
         );
@@ -269,14 +275,18 @@ contract DistributorNewTest is Test, ERC1155Holder {
     function test_timeOut() public {
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            defaultTimeOut,
             sets1,
             0 // template index
         );
         vm.label(distributor1, "Distributor for Q1");        
         // split collateral into the correspondent conditionals
+
+        factory.grantRole(MANAGER_ROLE, alice); // only admin
+        
         vm.startPrank(alice);
         uint amount = 100;
         collateralToken.approve(CT_gnosis, 2*amount);
@@ -287,6 +297,7 @@ contract DistributorNewTest is Test, ERC1155Holder {
             sets1, 
             2*amount
         );
+        factory.changeTimeOut(condition1, defaultTimeOut); 
         ICT(CT_gnosis).setApprovalForAll(distributor1, true);
         IDistributor(distributor1).addFunds(amount);
         uint[] memory alicePrediction = new uint[](3);
@@ -297,13 +308,10 @@ contract DistributorNewTest is Test, ERC1155Holder {
         vm.warp(defaultTimeOut);
         vm.expectRevert(bytes("Time is out"));//
         IDistributor(distributor1).setProbabilityDistribution(0, alicePrediction, '');
-        vm.expectRevert(bytes('Only moderators can change'));
-        IDistributor(distributor1).changeTimeOut(defaultTimeOut + 1 days); 
         // change timeout via a manager
         vm.stopPrank();
-        factory.grantRole(MANAGER_ROLE, alice); // only admin
         vm.startPrank(alice);
-        IDistributor(distributor1).changeTimeOut(defaultTimeOut + 1 days); 
+        factory.changeTimeOut(condition1, defaultTimeOut + 1 days); 
         IDistributor(distributor1).setProbabilityDistribution(0, alicePrediction, '');
         // if answered, should revert
         vm.stopPrank();
@@ -315,16 +323,17 @@ contract DistributorNewTest is Test, ERC1155Holder {
         ICT(CT_gnosis).reportPayouts(questionId1, payout);
         IDistributor(distributor1).checkQuestion();
         vm.stopPrank();
-        vm.expectRevert(bytes('Question answered'));
-        vm.prank(alice);
-        IDistributor(distributor1).changeTimeOut(defaultTimeOut + 1 days); 
+//        vm.expectRevert(bytes('Question answered'));
+//        vm.prank(alice);
+//        IDistributor(distributor1).changeTimeOut(defaultTimeOut + 1 days); 
     }
     function test_question_answered_notChecked() public {
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0 // template index
         );
@@ -376,9 +385,10 @@ contract DistributorNewTest is Test, ERC1155Holder {
     function test_question_answered_checked() public {
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0 // template index
         );
@@ -420,9 +430,10 @@ contract DistributorNewTest is Test, ERC1155Holder {
     function test_weighted_positions() public {
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0 // template index
         );
@@ -518,6 +529,16 @@ contract DistributorNewTest is Test, ERC1155Holder {
         emit log_named_uint("CAROL returned 2:", uint256(Carol_returnedTokens[2]));
 
         //////////////////////////////////////////////// REDEMPTION
+        vm.prank(carol);
+        IDistributor(distributor1).redeem();        
+        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_0), Carol_returnedTokens[0]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_1), Carol_returnedTokens[1]);
+        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_2), Carol_returnedTokens[2]);        
+        // avoid multiple redemption!!!
+        vm.expectRevert(bytes("Done"));
+        vm.prank(carol);
+        IDistributor(distributor1).redeem();
+
         vm.prank(alice);
         IDistributor(distributor1).redeem();
         assertEq(ICT(CT_gnosis).balanceOf(address(alice), positions_0), Alice_returnedTokens[0]);
@@ -528,11 +549,7 @@ contract DistributorNewTest is Test, ERC1155Holder {
         assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_0), Bob_returnedTokens[0]);
         assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_1), Bob_returnedTokens[1]);
         assertEq(ICT(CT_gnosis).balanceOf(address(bob), positions_2), Bob_returnedTokens[2]);
-        vm.prank(carol);
-        IDistributor(distributor1).redeem();        
-        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_0), Carol_returnedTokens[0]);
-        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_1), Carol_returnedTokens[1]);
-        assertEq(ICT(CT_gnosis).balanceOf(address(carol), positions_2), Carol_returnedTokens[2]);        
+
         //////////////////////////////////////////////// GETTING COLLATERAL
         bytes32 condition = ICT(CT_gnosis).getConditionId(oracle, questionId1, 3);
         userRedeemsCollateral(alice, rootCollateral, condition, sets1);
@@ -548,11 +565,13 @@ contract DistributorNewTest is Test, ERC1155Holder {
             condition1,     // Q1
             sets1[0]        // A
         );
+
         distributor1 = factory.createDistributor(
-            collectionA,
+            rootCollateral,     // root 
+            condition1,         // condition1
+            sets1[0],           // A
             condition2,
             address(collateralToken),
-            0,
             sets2,
             0 // template index
         );
@@ -618,14 +637,6 @@ contract DistributorNewTest is Test, ERC1155Holder {
             Hi |
             Lo |       
          */
-        // not gonna use..
-//        distributor1 = factory.createDistributor(
-//            rootCollateral, 
-//            condition2, 
-//            address(collateralToken), 
-//            sets2, 
-//            0
-//        );   
 //        vm.label(distributor1, "Distributor for Q2::[Hi, Lo]");
         collateralToken.mint(alice, 100);
         bytes32 collectionHi = ICT(CT_gnosis).getCollectionId(
@@ -634,10 +645,11 @@ contract DistributorNewTest is Test, ERC1155Holder {
             sets1[0]        // Hi
         );
         distributor2 = factory.createDistributor(
-            collectionHi,
+            rootCollateral,
+            condition2,
+            sets1[0],
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0 // template index
         );
@@ -649,10 +661,11 @@ contract DistributorNewTest is Test, ERC1155Holder {
             sets2[1]        // Lo
         );
         distributor3 = factory.createDistributor(
-            collectionLo,
+            rootCollateral, // from collateral
+            condition2,     // Q2
+            sets2[1],        // Lo
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0 // template index
         );
@@ -905,10 +918,11 @@ contract DistributorNewTest is Test, ERC1155Holder {
         // simulation in libreoffice file
         // create also a distributor for Q1[A, B, C]
         distributor1 = factory.createDistributor(
-            rootCollateral, 
+            rootCollateral,
+            rootCollateral,
+            0,
             condition1, 
             address(collateralToken), 
-            0,
             sets1, 
             0
         );   
@@ -921,10 +935,11 @@ contract DistributorNewTest is Test, ERC1155Holder {
             sets1[0]        // A
         );
         distributor2 = factory.createDistributor(
-            collectionA,
+            rootCollateral, // from collateral
+            condition1,     // Q1
+            sets1[0],        // A
             condition2,
             address(collateralToken),
-            0,
             sets2,
             0 // template index
         );
@@ -1099,10 +1114,11 @@ contract DistributorNewTest is Test, ERC1155Holder {
             sets1[0]        // Hi
         );
         distributor2 = factory.createDistributor(
-            collectionHi,
+            rootCollateral, // from collateral
+            condition2,     // Q2
+            sets1[0],        // Hi
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0 // template index
         );
@@ -1230,9 +1246,10 @@ contract DistributorNewTest is Test, ERC1155Holder {
         // shallow distributor
         distributor1 = factory.createDistributor(
             rootCollateral,
+            rootCollateral,
+            0,
             condition2,
             address(collateralToken),
-            0,
             sets2,
             0
         );
@@ -1245,10 +1262,11 @@ contract DistributorNewTest is Test, ERC1155Holder {
         );
         // deep distributor
         distributor2 = factory.createDistributor(
-            collectionHi,
+            rootCollateral, // from collateral
+            condition2,     // Q2
+            sets1[0],        // Hi
             condition1,
             address(collateralToken),
-            0,
             sets1,
             0
         );
