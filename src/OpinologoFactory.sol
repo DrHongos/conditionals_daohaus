@@ -8,10 +8,8 @@ import "../interfaces/ICT.sol";
 import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates
 
 //  TODO
-// questions have timelock (distributors are conditioned on it)
-    // conditional distributors could be conditioned by question timelock (only if ends later than parent)
-// oracle approves question (address can be changed)
-// fee mechanism
+// conditional distributors could be conditioned by question timelock (only if ends later than parent)
+// fee mechanism (maybe in collateral?)
 
 contract OpinologosFactory is AccessControl {
     bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
@@ -27,29 +25,31 @@ contract OpinologosFactory is AccessControl {
     mapping(bytes32 => bool) public distributorsSignatures;
     mapping(address => Distributor) public distributors;
     struct Question {
-        bytes32 condition;        
-        bytes32 questionId;
-        address creator;
-        address oracle; 
-        uint outcomes;
+        bytes32 condition;   // pointer for the CT contracts
+        bytes32 questionId;  // data related hash
+        address creator;     // manager of this object
+        address oracle;      // address that resolves the condition
+        uint outcomes;       // number of outcomes
         uint timeout;        // time constraint
-        //bool approved;        // oracle approval
+        bool launched;       // question launched (approved by CREATOR)
     }
     mapping(bytes32 => Question) public questions;    
-    
+    mapping(address => bool) public blocked;    
     mapping(uint => address) public templates;
     uint public questionsCount;
     uint public distributorsCount;
 
-    event NewQuestionCreated(
+    event NewQuestionPrepared(
         address oracle, 
         address creator, 
         bytes32 condition, 
         bytes32 questionId, 
         uint outcomes, 
-        uint timeout,
-        uint index
+        uint timeout
     );
+    event AddressBlocked(address who, bool blocking);
+    event NewQuestionCreated(bytes32 condition, uint index);
+    event QuestionRemoved(bytes32 condition, address who);
     event DistributorCreated(
         bytes32 conditionalParentCollection,           
         bytes32 conditionalCondition,               
@@ -70,27 +70,57 @@ contract OpinologosFactory is AccessControl {
         _grantRole(MANAGER_ROLE, msg.sender);
     }
 
-    ///@dev creates a new condition and stores it
-    function createQuestion(
+    ///@dev stores a new Question object
+    function prepareQuestion(
         address _oracle,         // solver of the condition
         bytes32 _questionId,     // referrer to the condition (used to store IPFS cid of question data)
-        uint _responses,          // number of possible outcomes
+        uint _responses,         // number of possible outcomes
         uint _timeout
-    ) public onlyRole(CREATOR_ROLE) returns (bytes32 conditionId) {
+    ) public returns (bytes32 conditionId) {
         address _creator = msg.sender;
-        ICT(CT_CONTRACT).prepareCondition(address(_oracle), _questionId, _responses);
+        require(!blocked[_creator], "User is blocked");
+        require(!blocked[_oracle], "Oracle is blocked");
         conditionId = ICT(CT_CONTRACT).getConditionId(address(_oracle), _questionId, _responses);
         Question memory newQuestion = Question({
-            condition: conditionId,        
+            condition: conditionId,
             questionId: _questionId,
             creator: _creator,
             oracle: _oracle, 
             outcomes: _responses,
-            timeout: _timeout
+            timeout: _timeout,
+            launched: false
         });
         questions[conditionId] = newQuestion;
+        emit NewQuestionPrepared(_oracle, _creator, conditionId, _questionId, _responses, _timeout);
+    }
+
+    ///@dev launches a new Question object
+    function createQuestion(bytes32 condition) public {
+        Question storage question = questions[condition];
+        require(msg.sender == question.oracle, "Not the oracle");
+        require(!blocked[msg.sender], "Oracle is blocked");
+        require(question.launched == false, "Question launched");
+        ICT(CT_CONTRACT).prepareCondition(question.oracle, question.questionId, question.outcomes);
+        question.launched = true;
         questionsCount++;
-        emit NewQuestionCreated(_oracle, _creator, conditionId, _questionId, _responses, _timeout, questionsCount);
+        emit NewQuestionCreated(condition, questionsCount);
+    }
+
+    function blockAdddress(address gilipollas, bool blocking) public onlyRole(CREATOR_ROLE) {
+        blocked[gilipollas] = blocking;
+        emit AddressBlocked(gilipollas, blocking);
+    }
+    function removeQuestion(bytes32 condition) public onlyRole(CREATOR_ROLE) {
+        Question storage question = questions[condition];
+        question.launched = false;
+        question.condition = "";
+        question.questionId = "";
+        question.oracle = address(0);
+        emit QuestionRemoved(condition, msg.sender);
+    }
+
+    function DistributorChecks() internal returns(bool) {
+
     }
 
     function createDistributor(
@@ -105,8 +135,22 @@ contract OpinologosFactory is AccessControl {
         external
         returns (address newDistributorAddress)
     {
-// NOTICE!! the test below is blocked for test issues.
-        require(ICT(CT_CONTRACT).payoutDenominator(_question_condition) == 0, "Question closed");
+        {
+            require(ICT(CT_CONTRACT).payoutDenominator(_question_condition) == 0, "Question closed");
+            uint outcomeSlotCount = ICT(CT_CONTRACT).getOutcomeSlotCount(_question_condition);
+            uint fullIndexSet = (1 << outcomeSlotCount) - 1;
+            uint result = 0;
+            for (uint256 i = 0; i < _indexSets.length; i++) {
+                result += _indexSets[i];
+            }
+            require(result == fullIndexSet, "Invalid indexSets");
+
+            // check question is launched?
+
+            // TODO: can check the timeout of both questions and allow/block its creation
+
+        }
+        
         address templateUsed = templates[template_index];
         require(templateUsed != address(0), "Template empty");
 
@@ -116,8 +160,6 @@ contract OpinologosFactory is AccessControl {
         } else {
             parentCollection = bytes32(0);  // ROOT
         }
-
-        // TODO: can check the timeout of both questions and allow/block its creation
 
         bytes32 signature = keccak256(abi.encodePacked(parentCollection, _question_condition, _indexSets));
         require(distributorsSignatures[signature] == false, "Distributor already exists");
@@ -149,7 +191,6 @@ contract OpinologosFactory is AccessControl {
             _indexSets
         );
     }
-
     function setTemplate(address _newTemplate, uint index)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -161,17 +202,13 @@ contract OpinologosFactory is AccessControl {
         fee = _newFee;
         emit FeeUpdated(_newFee);
     }
-    function changeTimeOut(bytes32 question_condition, uint _timeout) public onlyRole(MANAGER_ROLE) {
-        Question storage question = questions[question_condition];
+    function changeTimeOut(bytes32 condition, uint _timeout) public onlyRole(MANAGER_ROLE) {
+        Question storage question = questions[condition];
         require(_timeout > question.timeout, 'Wrong value');
         question.timeout = _timeout;
-        emit TimeOutUpdated(question_condition, _timeout);
+        emit TimeOutUpdated(condition, _timeout);
     }
     ///////////////////////////////////////////////////VIEW FUNCTIONS
-    // candidate to deprecation (only used in tests)
-    function getParentCollection(address dist) external view returns(bytes32) {
-        return distributors[dist].collection;
-    }
     function getTimeout(bytes32 condition) public view returns(uint) {
         return questions[condition].timeout;
     }

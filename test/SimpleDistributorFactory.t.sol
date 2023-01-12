@@ -40,6 +40,7 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
     OpinologosFactory factory;
     address oracle;
     address alice;
+    address creator;
     ERC20PresetMinterPauser collateralToken;
 
     struct Question {
@@ -62,6 +63,10 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         //alice = new User(address(collateralToken));
         alice = address(1);
         vm.label(address(alice), "Alice");
+
+        creator = address(2);
+        vm.label(address(creator), "Creator");
+
         collateralToken.mint(address(this), initialBalance);        
         collateralToken.mint(address(alice), initialBalance);        
         distributor = new Distributor();
@@ -69,12 +74,15 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         factory = new OpinologosFactory(CT_gnosis);
         vm.label(address(factory), "Factory");
         factory.grantRole(CREATOR_ROLE, address(this));
+        factory.grantRole(CREATOR_ROLE, creator);
     }
     function test_prepareNewCondition() public {
         assertEq(factory.questionsCount(), 0);
-        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3, 0);
+        bytes32 condition_created = factory.prepareQuestion(address(oracle), questionId1, 3, 0);
+        vm.prank(oracle);
+        factory.createQuestion(condition_created);
         assertEq(factory.questionsCount(), 1);
-        (bytes32 cond, bytes32 quest, address creator, address _oracle, uint outcomes, uint timeout) = factory.questions(condition_created);
+        (bytes32 cond, bytes32 quest, address creator, address _oracle, uint outcomes, uint timeout, bool launched) = factory.questions(condition_created);
         assertEq(cond, condition_created);
         assertEq(_oracle, oracle);
         assertEq(outcomes, 3);
@@ -82,7 +90,9 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
     } 
     function test_createDistributor() public {
         assertEq(factory.distributorsCount(), 0);
-        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3, 0);
+        bytes32 condition_created = factory.prepareQuestion(address(oracle), questionId1, 3, 0);
+        vm.prank(oracle);
+        factory.createQuestion(condition_created);
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
@@ -105,12 +115,14 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         assertEq(collection, rootCollateral);
         assertEq(template, factory.templates(0));
         assertEq(question_condition, condition_created);
-        (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes, uint timeout) = factory.questions(question_condition);
+        (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes, uint timeout, bool launched) = factory.questions(question_condition);
         assertEq(questionId1, questionId);
     } 
     function test_distributor_cannot_be_repeated() public {
         assertEq(factory.distributorsCount(), 0);
-        bytes32 condition_created = factory.createQuestion(address(oracle), questionId1, 3, 0);
+        bytes32 condition_created = factory.prepareQuestion(address(oracle), questionId1, 3, 0);
+        vm.prank(oracle);
+        factory.createQuestion(condition_created);
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
@@ -141,7 +153,9 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         assertEq(factory.distributorsCount(), 1);
     } 
     function test_createAndInitializeDistributor() public {
-        bytes32 condition1 = factory.createQuestion(address(oracle), questionId1, 3, block.timestamp + 100);
+        bytes32 condition1 = factory.prepareQuestion(address(oracle), questionId1, 3, block.timestamp + 100);
+        vm.prank(oracle);
+        factory.createQuestion(condition1);
         assertEq(factory.getTimeout(condition1), block.timestamp + 100);
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        

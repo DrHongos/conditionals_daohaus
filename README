@@ -1,6 +1,7 @@
 forge test --fork-url https://rpc.gnosischain.com
 
 try also --watch (re runs tests of files modified)
+forge script script/SimpleDistributorDeploy.s.sol:SystemDeployment --rpc-url https://rpc.gnosischain.com --private-key XXX --etherscan-api-key XXX --broadcast --verify -vvvv
 forge verify-contract --chain-id 100 --num-of-optimizations 200 --watch --compiler-version 0.8.16+commit.07a7930e **address** src/OpinologoFactory.sol:OpinologosFactory JCVMBDW3URWNNG7MFHA4FATVBRD9JMG9KN
 since it calls CT_gnosis contract for tests
 // idea to fix that dependency: 

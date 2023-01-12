@@ -128,7 +128,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         require(sum > 0, "At least one value");
         uint[] memory newPosition = new uint[](len);
         for (uint i = 0; i < len; i++) {
-            uint value = distribution[i] * 100 / sum;
+            uint value = distribution[i] * 1000 / sum;
             newPosition[i] = value;
             positionsSum[i] += value * weight;
             if (user.probabilityDistribution.length > 0) {

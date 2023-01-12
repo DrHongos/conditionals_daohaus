@@ -46,6 +46,7 @@ contract DistributorNewTest is Test, ERC1155Holder {
     ERC20PresetMinterPauser collateralToken;
 
     address oracle;
+    address creator;
     address alice;
     address bob;
     address carol;
@@ -73,6 +74,8 @@ contract DistributorNewTest is Test, ERC1155Holder {
         vm.label(address(3), "Carol");
         deedee = address(4);
         vm.label(address(4), "deedee");
+        creator = address(5);
+        vm.label(address(5), "creator");
         collateralToken.mint(address(1), initialBalance);
         collateralToken.mint(address(2), initialBalance);
         collateralToken.mint(address(3), initialBalance);
@@ -80,16 +83,23 @@ contract DistributorNewTest is Test, ERC1155Holder {
         //////////////////
         factory.setTemplate(address(distributor_template), 0);
         factory.grantRole(CREATOR_ROLE, address(this));
-        condition1 = factory.createQuestion(oracle, questionId1, 3, 0);
+        factory.grantRole(CREATOR_ROLE, creator);
+        condition1 = factory.prepareQuestion(oracle, questionId1, 3, 0);
+        vm.prank(oracle);
+        factory.createQuestion(condition1);
         sets1[0] = uint(1); //0b001        
         sets1[1] = uint(2); //0b010       
         sets1[2] = uint(4); //0b100
 
-        condition2 = factory.createQuestion(oracle, questionId2, 2, 0);
+        condition2 = factory.prepareQuestion(oracle, questionId2, 2, 0);
+        vm.prank(oracle);
+        factory.createQuestion(condition2);
         sets2[0] = uint(1); //0b001        
         sets2[1] = uint(2); //0b010       
 
-        condition3 = factory.createQuestion(oracle, questionId3, 3, 0);
+        condition3 = factory.prepareQuestion(oracle, questionId3, 3, 0);
+        vm.prank(oracle);
+        factory.createQuestion(condition3);
         sets3[0] = uint(1); //0b001        
         sets3[1] = uint(2); //0b010       
         sets3[2] = uint(4); //0b100
@@ -212,13 +222,30 @@ contract DistributorNewTest is Test, ERC1155Holder {
         IDistributor(distributor1).setProbabilityDistribution(0, bobPrediction, 'A long string to test storage issues');
         // *10 comes from a proportion given in the distributor
         uint[] memory bobPosition = IDistributor(distributor1).getUserPosition(bob);
-        assertEq(bobPrediction[0]*10, bobPosition[0]);
-        assertEq(bobPrediction[1]*10, bobPosition[1]);    
-        assertEq(bobPrediction[2]*10, bobPosition[2]);    
+        assertEq(bobPrediction[0]*100, bobPosition[0]);
+        assertEq(bobPrediction[1]*100, bobPosition[1]);    
+        assertEq(bobPrediction[2]*100, bobPosition[2]);    
     }
     
 
     function test_add_funds() public {
+        uint[] memory setsfake = new uint[](3);
+        setsfake[0] = uint(2);
+        setsfake[1] = uint(2);
+        setsfake[2] = uint(4);
+        
+        vm.expectRevert(bytes("Invalid indexSets"));
+        distributor1 = factory.createDistributor(
+            rootCollateral,
+            rootCollateral,
+            0,
+            condition1,
+            address(collateralToken),
+            setsfake,
+            0 // template index
+        );
+
+
         distributor1 = factory.createDistributor(
             rootCollateral,
             rootCollateral,
@@ -622,8 +649,8 @@ contract DistributorNewTest is Test, ERC1155Holder {
         IDistributor(distributor1).setProbabilityDistribution(amount, bobPrediction, 'A long string to test storage issues');
         // *10 comes from a proportion given in the distributor
         uint[] memory bobPosition = IDistributor(distributor1).getUserPosition(bob);
-        assertEq(bobPrediction[0]*10, bobPosition[0]);
-        assertEq(bobPrediction[1]*10, bobPosition[1]);    
+        assertEq(bobPrediction[0]*100, bobPosition[0]);
+        assertEq(bobPrediction[1]*100, bobPosition[1]);    
         // check totalBalance
         assertEq(IDistributor(distributor1).totalBalance(), 2*amount);
     }
