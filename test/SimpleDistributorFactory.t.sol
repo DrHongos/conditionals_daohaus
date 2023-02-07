@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "../interfaces/ICT.sol";
 import "../src/Distributor.sol";
+import "../src/DistributorFactory.sol";
 import "../interfaces/IDistributor.sol";
 import "../src/OpinologoFactory.sol";
 import "forge-std/Test.sol";
@@ -37,11 +38,16 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
     uint defaultTimeOut = block.timestamp + 1 days;
 
     Distributor distributor;
-    OpinologosFactory factory;
+    OpinologosFactory opinologos;
+    DistributorFactory factory;
     address oracle;
     address alice;
     address creator;
     ERC20PresetMinterPauser collateralToken;
+
+    bytes32[] conditions;
+    uint[] conditionsIndexes;
+
 
     struct Question {
         bytes32 condition;        
@@ -71,18 +77,19 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
         collateralToken.mint(address(alice), initialBalance);        
         distributor = new Distributor();
         vm.label(address(distributor), "Distributor template");
-        factory = new OpinologosFactory(CT_gnosis);
+        opinologos = new OpinologosFactory(CT_gnosis);
+        factory = new DistributorFactory(CT_gnosis, address(opinologos));
         vm.label(address(factory), "Factory");
-        factory.grantRole(CREATOR_ROLE, address(this));
-        factory.grantRole(CREATOR_ROLE, creator);
+        opinologos.grantRole(CREATOR_ROLE, address(this));
+        opinologos.grantRole(CREATOR_ROLE, creator);
     }
     function test_prepareNewCondition() public {
-        assertEq(factory.questionsCount(), 0);
-        bytes32 condition_created = factory.prepareQuestion(address(oracle), questionId1, 3, 0);
+        assertEq(opinologos.questionsCount(), 0);
+        bytes32 condition_created = opinologos.prepareQuestion(address(oracle), questionId1, 3, 0);
         vm.prank(oracle);
-        factory.createQuestion(condition_created);
-        assertEq(factory.questionsCount(), 1);
-        (bytes32 cond, bytes32 quest, address creator, address _oracle, uint outcomes, uint timeout, bool launched) = factory.questions(condition_created);
+        opinologos.createQuestion(condition_created);
+        assertEq(opinologos.questionsCount(), 1);
+        (bytes32 cond, bytes32 quest, address _creator, address _oracle, uint outcomes, uint _timeout, bool _launched) = opinologos.questions(condition_created);
         assertEq(cond, condition_created);
         assertEq(_oracle, oracle);
         assertEq(outcomes, 3);
@@ -90,86 +97,95 @@ contract DistributorFactoryTest is Test, ERC1155Holder {
     } 
     function test_createDistributor() public {
         assertEq(factory.distributorsCount(), 0);
-        bytes32 condition_created = factory.prepareQuestion(address(oracle), questionId1, 3, 0);
+        bytes32 condition_created = opinologos.prepareQuestion(address(oracle), questionId1, 3, 0);
         vm.prank(oracle);
-        factory.createQuestion(condition_created);
+        opinologos.createQuestion(condition_created);
+        uint price = 0;
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
-        factory.setTemplate(address(distributor), 0);        
+        factory.setTemplate(address(distributor));        
+        conditions.push(condition_created);
+        conditionsIndexes.push(0);
         vm.prank(alice);
-
         address distributor_address = factory.createDistributor(
-            rootCollateral,
-            rootCollateral,
-            0,
-            condition_created,
+            //rootCollateral,
+            //rootCollateral,
+            conditions,
+            conditionsIndexes,
             address(collateralToken),
-            indexSets,
-            0 // template index
+            price,
+            indexSets
         );
         assertEq(factory.distributorsCount(), 1);
-        (bytes32 collection, bytes32 question_condition, address template)
+        (bytes32 collection, bytes32 question_condition, address template, uint p)
             = factory.distributors(distributor_address);
         assertEq(collection, rootCollateral);
-        assertEq(template, factory.templates(0));
+        assertEq(template, factory.template());
         assertEq(question_condition, condition_created);
-        (bytes32 cond, bytes32 questionId, address creator, address _oracle, uint outcomes, uint timeout, bool launched) = factory.questions(question_condition);
+        assertEq(p, price);
+        (bytes32 _cond, bytes32 questionId, address _creator, address _oracle, uint outcomes, uint timeout, bool launched) = opinologos.questions(question_condition);
         assertEq(questionId1, questionId);
     } 
     function test_distributor_cannot_be_repeated() public {
         assertEq(factory.distributorsCount(), 0);
-        bytes32 condition_created = factory.prepareQuestion(address(oracle), questionId1, 3, 0);
+        bytes32 condition_created = opinologos.prepareQuestion(address(oracle), questionId1, 3, 0);
         vm.prank(oracle);
-        factory.createQuestion(condition_created);
+        opinologos.createQuestion(condition_created);
+        uint price = 0;
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
-        factory.setTemplate(address(distributor), 0);        
+        factory.setTemplate(address(distributor));
+        conditions.push(condition_created);
+        conditionsIndexes.push(0);        
         vm.prank(alice);
-
         address distributor_address = factory.createDistributor(
-            rootCollateral,
-            rootCollateral,
-            0,
-            condition_created,
+            //rootCollateral,
+            //rootCollateral,
+            conditions,
+            conditionsIndexes,
             address(collateralToken),
-            indexSets,
-            0 // template index
+            price,
+            indexSets
         );
         vm.expectRevert(bytes('Distributor already exists'));
         vm.prank(alice);
         factory.createDistributor(
-            rootCollateral,
-            rootCollateral,
-            0,
-            condition_created,
+            //rootCollateral,
+            //rootCollateral,
+            conditions,
+            conditionsIndexes,
             address(collateralToken),
-            indexSets,
-            0 // template index
+            price,
+            indexSets
         );
         assertEq(factory.distributorsCount(), 1);
     } 
     function test_createAndInitializeDistributor() public {
-        bytes32 condition1 = factory.prepareQuestion(address(oracle), questionId1, 3, block.timestamp + 100);
+        bytes32 condition1 = opinologos.prepareQuestion(address(oracle), questionId1, 3, block.timestamp + 100);
         vm.prank(oracle);
-        factory.createQuestion(condition1);
-        assertEq(factory.getTimeout(condition1), block.timestamp + 100);
+        opinologos.createQuestion(condition1);
+        assertEq(opinologos.getTimeout(condition1), block.timestamp + 100);
+        uint price = 0;
         uint[] memory indexSets = new uint[](3);
         indexSets[0] = uint(1); //0b001        
         indexSets[1] = uint(2); //0b010       
         indexSets[2] = uint(4); //0b100
-        factory.setTemplate(address(distributor), 0);
+        factory.setTemplate(address(distributor));
+        conditions.push(condition1);
+        conditionsIndexes.push(0);
+
         address distributor1 = factory.createDistributor(
-            rootCollateral,
-            rootCollateral,
-            0,
-            condition1,
+            //rootCollateral,
+            //rootCollateral,
+            conditions,
+            conditionsIndexes,
             address(collateralToken),
-            indexSets,
-            0 // template index
+            price,
+            indexSets
         );
         vm.label(distributor1, "Distributor for Q1");        
         // split collateral into the correspondent conditionals

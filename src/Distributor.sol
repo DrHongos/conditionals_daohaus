@@ -5,22 +5,33 @@ pragma solidity ^0.8.2;
 
 import "../interfaces/ICT.sol";
 import "../interfaces/IFactory.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 
 contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
-    bytes32 public conditionId;         // refers to the question
-    bytes32 public parentCollection;    // refers to the liquidity (root / mixed)
-    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
+    bytes32 public conditionId;         // refers to the question   // pasaria a ser conditions[last]
+    
+    //bytes32 public parentCollection;    // refers to the liquidity (root / conditional (collection))
 
-    uint public fee;                  // to implement
+    bytes32[] public conditions;
+    uint[] public conditionsIndexes;
+    // work on here.. keep list of conditions / collections & indexes
+    // and any call transform collateral into conditionals
+    // el problema al splittear es generar los indexSets para cada condition
+    // quiza lo mejor es quitar el index y luego dejar valores base
+    //uint public fee;                  // to implement
 
+
+
+    uint price;
     // this refers to the direct upward question
     uint public question_denominator; // store it when question is answered & internal boolean for status = redeem
     uint[] public question_numerator; // result of the question, avoiding recurrent internal calls
 
+    address public opinologos;        // questions factory
     address public factory;           // factory that creates this
     uint[] public indexSets;          // To select the positions
     uint[] public positionIds;        // store the position ids
@@ -30,19 +41,21 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     uint public totalBalance;         // keeper of the total balance
     mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
     struct UserPosition {
-        uint positionSize;                // to handle price band
+        bool payed;
+        //uint positionSize;                // to handle price band
         uint[] probabilityDistribution;   // position discrimination
         string justifiedPositions;        // this one is expensive and not needed
     }
     mapping (address => UserPosition) public positions;
     mapping(address => bool) public redeemed;
 
+        //bytes32 parentCollection,
     event DistributorInitialized(
         address collateralToken,
-        bytes32 condition,
-        bytes32 parentCollection
+        bytes32 condition,              
+        uint price
     );
-    event UserSetProbability(address who, uint[] userDistribution, uint amount, string justification);
+    event UserSetProbability(address who, uint[] userDistribution, string justification);
     event UserRedemption(address who, uint[] redemption);
     event DistributorFunded(address who, uint amount);
 
@@ -54,70 +67,161 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     constructor() {}
 
     function initialize(
-        bytes32 _condition,
-        bytes32 _parentCollection,
-        address _collateral,
+        bytes32[] calldata _conditions,
+        uint[] calldata _conditionsIndexes,
+        address _opinologos,
+        address _collateral,                    
+        uint _price,
         uint[] calldata _indexSets
     ) initializer public {
         factory = msg.sender;
-        conditionId = _condition;
-        parentCollection = _parentCollection;
+        opinologos = _opinologos;
+        conditions = _conditions;
+        conditionId = _conditions[_conditions.length - 1];  // last condition
+        conditionsIndexes = _conditionsIndexes;
         indexSets = _indexSets;
         collateralToken = _collateral;
+        price = _price;
         address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; // gnosis chain CT contract
         conditionalTokens = ICT(CT_gnosis);
-        fee = IFactory(factory).fee();
+        //fee = IFactory(factory).fee();
+        
+        bytes32 parentCollection = IFactory(factory).distributorParent(address(this));
         for (uint i=0; i < _indexSets.length; i++) {
-            bytes32 collectionId = conditionalTokens.getCollectionId(
-                _parentCollection,
-                _condition,
-                _indexSets[i]
+            //bytes32 collectionId = conditionalTokens.getCollectionId(
+            //    parentCollection,
+            //    conditionId,
+            //    _indexSets[i]
+            //);
+            //uint positionId = conditionalTokens.getPositionId(
+            //    _collateral,
+            //    collectionId
+            //);
+            positionIds.push(
+                conditionalTokens.getPositionId(_collateral,
+                    conditionalTokens.getCollectionId(parentCollection, conditionId, _indexSets[i]))
             );
-            uint positionId = conditionalTokens.getPositionId(
-                _collateral,
-                collectionId
-            );
-            positionIds.push(positionId);
         }
+
         emit DistributorInitialized(
             _collateral,
-            _condition,
-            _parentCollection
+            conditionId,
+//            parentCollection,
+            _price
         );
     }
 
-    function addFunds(uint amount) public openQuestion {
+    function addFunds(uint amount) public openQuestion { //address sender, 
         totalBalance += amount;
         address sender = msg.sender;
-        require(conditionalTokens.isApprovedForAll(sender, address(this)), "Insufficient allowance for conditional");
-        uint[] memory amounts = new uint[](positionIds.length);
-        for (uint i = 0; i < positionIds.length; i++) {
-            uint bal = conditionalTokens.balanceOf(sender, positionIds[i]);
-            require(bal >= amount, "Insufficient balance of conditional");
-            amounts[i] = amount;
+        require(IERC20(collateralToken).transferFrom(msg.sender, address(this), amount), "cost transfer failed");
+        require(IERC20(collateralToken).approve(address(conditionalTokens), amount), "approval for splits failed");
+        // loop to get to the final positions,
+        bytes32 collection = 0x0000000000000000000000000000000000000000000000000000000000000000;
+        for (uint i = 0; i < conditions.length; i++) {
+            // mixes should be forbiden? 
+            uint outcomes = conditionalTokens.getOutcomeSlotCount(conditions[i]);
+            uint[] memory indexSetsFetched = generateBasicPartition(outcomes);//getIndexes(conditions[i], conditionsIndexes[i]);
+            uint[] memory returnPositions = new uint[](outcomes);
+            uint[] memory returnAmounts = new uint[](outcomes);
+            conditionalTokens.splitPosition(IERC20(collateralToken), collection, conditions[i], indexSetsFetched, amount); 
+            if (i != conditions.length - 1) {
+                for (uint j = 0; j < outcomes; j++) {
+                    uint index = 1 << j;
+                    if (index != conditionsIndexes[i]) {
+                        uint positionId = conditionalTokens.getPositionId(collateralToken,
+                            conditionalTokens.getCollectionId(collection, conditions[i], index));
+                        returnPositions[j] = positionId;
+                        returnAmounts[j] = amount;
+                    }
+
+                }
+                conditionalTokens.safeBatchTransferFrom(address(this), sender, returnPositions, returnAmounts, "");
+            }
+            collection = conditionalTokens.getCollectionId(collection, conditions[i], conditionsIndexes[i]);            
+
         }
-        conditionalTokens.safeBatchTransferFrom(sender, address(this), positionIds, amounts, '');
         emit DistributorFunded(sender, amount);
     }
 
-    // users set its position in the distributor, pay the price (if required) and update if existent
+    function getIndexes(bytes32 condition, uint index) internal returns (uint[] memory) {
+           uint outcomes = conditionalTokens.getOutcomeSlotCount(condition);
+            
+            return generateBasicPartition(outcomes);
+ 
+/*         if (condition == conditionId) return indexSets;
+        else {
+            uint outcomes = conditionalTokens.getOutcomeSlotCount(condition);
+            
+            return generateBasicPartition(outcomes);
+            //// buscar el maximo
+            //uint fullIndexSet = (1 << outcomeSlotCount) - 1;
+            //// restarle el indice obligado (index)
+            //uint rest = fullIndexSet - index;            
+            //// recrear un array con los indices restantes
+            //indexes =
+            ///// otra forma
+            //bytes32 full = new bytes32(fullIndexSet); 
+            //bytes32 out = new bytes32(index); 
+            //bytes32 rest = full ^ out;
+            // then for each bit == 1 should enter 2**i into an array
+            // the problem is the length.. i should check if index is pure (and length == outcomes)
+            // or mixed (and length < outcomes)
+        } */
+
+    }
+
+/*      REPLICATE FROM FPMMs
+    - but they only allow markets of "pure" outcomeSlot (conditionsIndexes are in [1,2,4,8,16, etc])
+    - if i wanna keep working with joint outcomes i need to morph this functions to retrieve:
+        given an index and a condition, the minimal indexSets that contains the index needed
+        so:
+        b1111111111         fullIndex
+    -   b0000110000         input
+       ---------------
+        b1111001111 in an array
+
+
+ */
+    function generateBasicPartition(uint outcomeSlotCount)
+        private
+        pure
+        returns (uint[] memory partition)
+    {
+        partition = new uint[](outcomeSlotCount);
+        for(uint i = 0; i < outcomeSlotCount; i++) {
+            partition[i] = 1 << i;
+        }
+    }
+
+    //function splitPositionThroughAllConditions(uint amount)
+    //    private
+    //{
+    //    for(uint i = conditionIds.length - 1; int(i) >= 0; i--) {
+    //        uint[] memory partition = generateBasicPartition(outcomeSlotCounts[i]);
+    //        for(uint j = 0; j < collectionIds[i].length; j++) {
+    //            conditionalTokens.splitPosition(collateralToken, collectionIds[i][j], conditionIds[i], partition, amount);
+    //        }
+    //    }
+    //}
+
     function setProbabilityDistribution(
-        uint amount,
+        //uint amount,                        // deprecate! and call splitPositions on behalf of caller
         uint[] calldata distribution,
         string calldata justification
     ) public openQuestion {
         if (guardQuestionStatus()) return;               // finish early
         uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');
-        uint timeout = IFactory(factory).getTimeout(conditionId);
+        uint timeout = IFactory(opinologos).getTimeout(conditionId); // change this
         if (timeout > 0) {
             require(block.timestamp < timeout, 'Time is out');
         }
         address sender = msg.sender;
         UserPosition storage user = positions[sender];
-        uint weight = user.positionSize + amount;           // TODO: handle amount = 0 (for forms templates)
-        if (amount > 0) {
-            addFunds(amount);
+        if (price > 0 && !user.payed) {
+            addFunds(price);
+            user.payed = true;
         }
         user.justifiedPositions = justification;
         //---
@@ -130,15 +234,14 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         for (uint i = 0; i < len; i++) {
             uint value = distribution[i] * 1000 / sum;
             newPosition[i] = value;
-            positionsSum[i] += value * weight;
+            positionsSum[i] += value;// * weight;
             if (user.probabilityDistribution.length > 0) {
-                positionsSum[i] -= user.probabilityDistribution[i] * user.positionSize;
+                positionsSum[i] -= user.probabilityDistribution[i];
             }
         }
         //---
-        user.positionSize = weight;
         user.probabilityDistribution = newPosition;
-        emit UserSetProbability(sender, newPosition, weight, justification);
+        emit UserSetProbability(sender, newPosition, justification);
     }
 
     function redeem() public nonReentrant {
@@ -185,10 +288,9 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint[] memory returnedTokens = new uint[](indexSets.length);
         UserPosition memory user = positions[who];
         for (uint i=0; i < indexSets.length; i++) {
-            uint weighted = user.probabilityDistribution[i] * user.positionSize; // handle positionSize = 0
-            if (weighted != 0) {
-                returnedTokens[i] = (totalBalance * weighted) / positionsSum[i];
-                // positionsSum[i] cannot be zero while weighted != 0
+            uint pos = user.probabilityDistribution[i];
+            if (pos != 0) {
+                returnedTokens[i] = (totalBalance * pos) / positionsSum[i];
             } else {
                 returnedTokens[i] = 0;
             }

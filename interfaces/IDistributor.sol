@@ -11,15 +11,16 @@ interface IDistributor {
     event TimeOutUpdated(uint timeOut);
     
     function initialize(
-        bytes32 condition,
-        bytes32 parentCollection,
+        bytes32[] calldata conditions,
+        uint[] calldata conditionsIndexes,
+        //bytes32 parentCollection,
+        address opinologos,
         address collateral,
-//        uint timeout,
+        uint price,
         uint[] calldata indexSets
     ) external;
     function checkQuestion() external;
     function setProbabilityDistribution(
-        uint amount, 
         uint[] calldata distribution, 
         string calldata justification
     ) external;

@@ -6,7 +6,9 @@ interface IFactory {
     function getCondition(uint index) external view returns(bytes32);
     function getParentCollection(uint index) external view returns(bytes32);
     function getTimeout(bytes32 condition) external view returns(uint);
+    function getOutcomes(bytes32 condition) external view returns(uint);
     function changeTimeOut(bytes32 question_condition, uint _timeout) external;
+    function distributorParent(address) external view returns (bytes32);
     function createDistributor(
         bytes32 _parentCollection,
         address _collateralToken, 

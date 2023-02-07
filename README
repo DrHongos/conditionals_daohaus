@@ -1,21 +1,20 @@
-forge test --fork-url https://rpc.gnosischain.com
+forge test --fork-url https://rpc.gnosis.gateway.fm // sometimes with: --via-ir
 
+
+---------------------------------------------------
+30/01/23: Opinologos work after feedback
+
+    - implement FPMM (tests to implement)
+    - Separate question/distributors contracts
+    - Implement Reality.eth
+
+---------------------------------------------------
 try also --watch (re runs tests of files modified)
-forge script script/SimpleDistributorDeploy.s.sol:SystemDeployment --rpc-url https://rpc.gnosischain.com --private-key XXX --etherscan-api-key XXX --broadcast --verify -vvvv
+forge script script/SimpleDistributorDeploy.s.sol:SystemDeployment --rpc-url https://rpc.gnosis.gateway.fm --private-key XXX --etherscan-api-key XXX --broadcast --verify -vvvv
 forge verify-contract --chain-id 100 --num-of-optimizations 200 --watch --compiler-version 0.8.16+commit.07a7930e **address** src/OpinologoFactory.sol:OpinologosFactory JCVMBDW3URWNNG7MFHA4FATVBRD9JMG9KN
 since it calls CT_gnosis contract for tests
 // idea to fix that dependency: 
 Use the getCode cheatcode to deploy contracts with incompatible Solidity versions.
 
 
-NOTICE: decimals as a constant in the template is NOT replicated in clones.
-
-
-init conditions:
-conditionId: 0x4150c4c0eb3864b99dd6e9e406760fc00c7b3eec2b29e7996b2265d1a539aa55
-parentCollection: 0x0000000000000000000000000000000000000000000000000000000000000000
-collateralToken: 0xe91d153e0b41518a2ce8dd3d7944fa863463a97d (wxdai)
-ctAddress: 0xceafdd6bc0bef976fdcd1112955828e00543c0ce (gnosis chain)
-indexSet: 1,2,4
-amountToSplit: 1000000000000 (0.001)
-timeOut: 1672444800 (31/12/2022)
+NOTICE: decimals (constant) in the template is NOT replicated in clones.
