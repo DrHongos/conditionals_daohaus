@@ -5,6 +5,7 @@ pragma solidity ^0.8.2;
 
 import "../interfaces/ICT.sol";
 import "../interfaces/IFactory.sol";
+import "../interfaces/IDistributorFactory.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
@@ -13,43 +14,34 @@ import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 
 contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     bytes32 public conditionId;         // refers to the question   // pasaria a ser conditions[last]
-    
-    //bytes32 public parentCollection;    // refers to the liquidity (root / conditional (collection))
-
     bytes32[] public conditions;
     uint[] public conditionsIndexes;
-    // work on here.. keep list of conditions / collections & indexes
-    // and any call transform collateral into conditionals
-    // el problema al splittear es generar los indexSets para cada condition
-    // quiza lo mejor es quitar el index y luego dejar valores base
     //uint public fee;                  // to implement
-
-
-
     uint price;
     // this refers to the direct upward question
     uint public question_denominator; // store it when question is answered & internal boolean for status = redeem
     uint[] public question_numerator; // result of the question, avoiding recurrent internal calls
 
-    address public opinologos;        // questions factory
-    address public factory;           // factory that creates this
+    IFactory opinologos;        // questions factory
+    IDistributorFactory factory;           // factory that creates this
+
     uint[] public indexSets;          // To select the positions
     uint[] public positionIds;        // store the position ids
 
     address public collateralToken;   // ERC20 backing the tokens in game
     ICT conditionalTokens;            // matrix of conditional tokens
+
     uint public totalBalance;         // keeper of the total balance
-    mapping(uint => uint) public positionsSum;  // global sum of each position (weighted)
+    mapping(uint => uint) public positionsSum;  // global sum of each position
+
     struct UserPosition {
         bool payed;
-        //uint positionSize;                // to handle price band
         uint[] probabilityDistribution;   // position discrimination
         string justifiedPositions;        // this one is expensive and not needed
     }
     mapping (address => UserPosition) public positions;
     mapping(address => bool) public redeemed;
 
-        //bytes32 parentCollection,
     event DistributorInitialized(
         address collateralToken,
         bytes32 condition,              
@@ -74,8 +66,8 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         uint _price,
         uint[] calldata _indexSets
     ) initializer public {
-        factory = msg.sender;
-        opinologos = _opinologos;
+        factory = IDistributorFactory(msg.sender);
+        opinologos = IFactory(_opinologos);
         conditions = _conditions;
         conditionId = _conditions[_conditions.length - 1];  // last condition
         conditionsIndexes = _conditionsIndexes;
@@ -86,7 +78,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         conditionalTokens = ICT(CT_gnosis);
         //fee = IFactory(factory).fee();
         
-        bytes32 parentCollection = IFactory(factory).distributorParent(address(this));
+        bytes32 parentCollection = factory.distributorParent(address(this));
         for (uint i=0; i < _indexSets.length; i++) {
             positionIds.push(
                 conditionalTokens.getPositionId(_collateral,
@@ -191,7 +183,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         if (guardQuestionStatus()) return;               // finish early
         uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');
-        uint timeout = IFactory(opinologos).getTimeout(conditionId); // change this
+        uint timeout = opinologos.getTimeout(conditionId); // change this
         if (timeout > 0) {
             require(block.timestamp < timeout, 'Time is out');
         }

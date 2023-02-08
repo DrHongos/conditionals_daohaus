@@ -24,7 +24,6 @@ contract OpinologosFactory is AccessControl {
     }
     mapping(bytes32 => Question) public questions;    
     mapping(address => bool) public blocked;    
-//    mapping(uint => address) public templates;
     uint public questionsCount;
 
     event NewQuestionPrepared(
@@ -39,7 +38,6 @@ contract OpinologosFactory is AccessControl {
     event NewQuestionCreated(bytes32 condition, uint index);
     event QuestionRemoved(bytes32 condition, address who);
 
-//    event DistributorTemplateChanged(address newTemplate, uint index);
     event FeeUpdated(uint _newFee);
     event TimeOutUpdated(bytes32 question_condition, uint timeout);
     

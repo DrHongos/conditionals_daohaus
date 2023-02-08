@@ -3,7 +3,6 @@ pragma solidity ^0.8.2;
 
 import "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "openzeppelin-contracts/contracts/access/AccessControl.sol";
-//import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICT.sol";
 import "../interfaces/IDistributor.sol";
 
@@ -40,10 +39,6 @@ contract DistributorFactory is AccessControl {
     function createDistributor( 
         bytes32[] calldata _conditions,
         uint[] calldata _conditionsIndexes,
-        //bytes32 conditionalParentCollection,        // quiza deprecar
-        //bytes32 conditionalCondition,               // quiza deba ser array
-        //uint conditionalIndex,                      // este tambien
-        //bytes32 _question_condition,  // question condition // deprecar y usar conditions[last]
         address _collateralToken, // token of the parent collection
         uint _price,
         uint[] calldata _indexSets // groups for outcomes
@@ -66,7 +61,6 @@ contract DistributorFactory is AccessControl {
             require(template != address(0), "Template empty");
         }
 
-        // esto se modifica, pues conditions puede tener mas de una pregunta
         bytes32 parentCollection;
         if (_conditions.length > 1) {
             bytes32 collection = bytes32(0);
@@ -80,7 +74,6 @@ contract DistributorFactory is AccessControl {
         bytes32 signature = keccak256(abi.encodePacked(parentCollection, last_condition, _price, _indexSets));
         require(distributorsSignatures[signature] == false, "Distributor already exists");
         distributorsSignatures[signature] = true;
-        ////////////
 
         newDistributorAddress = Clones.clone(template);
         Distributor memory newDistributor = Distributor({
@@ -122,4 +115,5 @@ contract DistributorFactory is AccessControl {
         Distributor memory obj = distributors[dist];
         return obj.collection;        
     }
+
 }
