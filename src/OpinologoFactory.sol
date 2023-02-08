@@ -119,8 +119,8 @@ contract OpinologosFactory is AccessControl {
     function getTimeout(bytes32 condition) public view returns(uint) {
         return questions[condition].timeout;
     }
-    function getOutcomes(bytes32 condition) public view returns(uint) {
+/*     function getOutcomes(bytes32 condition) public view returns(uint) {
         return questions[condition].outcomes;
-    }
+    } */
 
 }

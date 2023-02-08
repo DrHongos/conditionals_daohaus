@@ -3,15 +3,14 @@ pragma solidity ^0.8.2;
 
 import "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "openzeppelin-contracts/contracts/access/AccessControl.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+//import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICT.sol";
-import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates
+import "../interfaces/IDistributor.sol";
 
 contract DistributorFactory is AccessControl {
     address public template;
     address CT_CONTRACT;
     address opinologos;
-//    bytes32 ROOT_PARENT_COLLECTION = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
     struct Distributor {
         bytes32 collection;
@@ -23,12 +22,6 @@ contract DistributorFactory is AccessControl {
     mapping(address => Distributor) public distributors;
     uint public distributorsCount;
 
-/*      
-        bytes32 conditionalParentCollection,           
-        bytes32 conditionalCondition,               
-        uint conditionalIndex,                       
-        address templateUsed, 
-        */
     event DistributorCreated(
         bytes32[] conditions,
         uint[] conditionsIndexes,
@@ -109,19 +102,12 @@ contract DistributorFactory is AccessControl {
 
         distributorsCount += 1;
         emit DistributorCreated(
-            //conditionalParentCollection,           
             _conditions,               
             _conditionsIndexes,                      
             newDistributorAddress, 
-//            template,
             _price,
             _indexSets
         );
-    }
-
-    function distributorParent(address dist) public view returns(bytes32) {
-        Distributor memory obj = distributors[dist];
-        return obj.collection;        
     }
 
     function setTemplate(address _newTemplate)
@@ -132,6 +118,8 @@ contract DistributorFactory is AccessControl {
         emit DistributorTemplateChanged(_newTemplate);
     }    
 
-
-
+    function distributorParent(address dist) public view returns(bytes32) {
+        Distributor memory obj = distributors[dist];
+        return obj.collection;        
+    }
 }

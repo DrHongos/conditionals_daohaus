@@ -171,7 +171,9 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         return ret;
     }
 
-/*     function generateBasicPartition(uint outcomeSlotCount)
+    /* 
+     probably cheaper function to create indexSets arrays from natural (not mixed) condition indexes
+     function generateBasicPartition(uint outcomeSlotCount)
         private
         pure
         returns (uint[] memory partition)
@@ -185,7 +187,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
     function setProbabilityDistribution(
         uint[] calldata distribution,
         string calldata justification
-    ) public openQuestion {
+    ) public openQuestion nonReentrant {
         if (guardQuestionStatus()) return;               // finish early
         uint len = indexSets.length;
         require(distribution.length == len, 'Wrong distribution provided');

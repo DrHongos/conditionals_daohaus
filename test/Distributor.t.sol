@@ -101,8 +101,8 @@ contract DistributorTest is Test, ERC1155Holder {
         condition2 = opinologos.prepareQuestion(oracle, questionId2, 2, 0);
         vm.prank(oracle);
         opinologos.createQuestion(condition2);
-        sets2[0] = uint(1); //0b001
-        sets2[1] = uint(2); //0b010
+        sets2[0] = uint(1); //0b01
+        sets2[1] = uint(2); //0b10
 
         condition3 = opinologos.prepareQuestion(oracle, questionId3, 10, 0);
         vm.prank(oracle);
