@@ -88,15 +88,6 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         
         bytes32 parentCollection = IFactory(factory).distributorParent(address(this));
         for (uint i=0; i < _indexSets.length; i++) {
-            //bytes32 collectionId = conditionalTokens.getCollectionId(
-            //    parentCollection,
-            //    conditionId,
-            //    _indexSets[i]
-            //);
-            //uint positionId = conditionalTokens.getPositionId(
-            //    _collateral,
-            //    collectionId
-            //);
             positionIds.push(
                 conditionalTokens.getPositionId(_collateral,
                     conditionalTokens.getCollectionId(parentCollection, conditionId, _indexSets[i]))
@@ -111,22 +102,22 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         );
     }
 
-    function addFunds(uint amount) public openQuestion { //address sender, 
+    function addFunds(uint amount) public openQuestion {
         totalBalance += amount;
         address sender = msg.sender;
         require(IERC20(collateralToken).transferFrom(msg.sender, address(this), amount), "cost transfer failed");
         require(IERC20(collateralToken).approve(address(conditionalTokens), amount), "approval for splits failed");
         // loop to get to the final positions,
-        bytes32 collection = 0x0000000000000000000000000000000000000000000000000000000000000000;
+        bytes32 collection = bytes32(0);
         for (uint i = 0; i < conditions.length; i++) {
-            // mixes should be forbiden? 
-            uint outcomes = conditionalTokens.getOutcomeSlotCount(conditions[i]);
-            uint[] memory indexSetsFetched = generateBasicPartition(outcomes);//getIndexes(conditions[i], conditionsIndexes[i]);
-            uint[] memory returnPositions = new uint[](outcomes);
-            uint[] memory returnAmounts = new uint[](outcomes);
+            uint outcomes = conditionalTokens.getOutcomeSlotCount(conditions[i]);            
+            uint[] memory indexSetsFetched = conditions[i] == conditionId ? indexSets : getIndexes(outcomes, conditionsIndexes[i]);//generateBasicPartition(outcomes);
+
             conditionalTokens.splitPosition(IERC20(collateralToken), collection, conditions[i], indexSetsFetched, amount); 
             if (i != conditions.length - 1) {
-                for (uint j = 0; j < outcomes; j++) {
+                uint[] memory returnPositions = new uint[](indexSetsFetched.length);
+                uint[] memory returnAmounts = new uint[](indexSetsFetched.length);
+                for (uint j = 0; j < indexSetsFetched.length; j++) {
                     uint index = 1 << j;
                     if (index != conditionsIndexes[i]) {
                         uint positionId = conditionalTokens.getPositionId(collateralToken,
@@ -144,46 +135,43 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         emit DistributorFunded(sender, amount);
     }
 
-    function getIndexes(bytes32 condition, uint index) internal returns (uint[] memory) {
-           uint outcomes = conditionalTokens.getOutcomeSlotCount(condition);
-            
-            return generateBasicPartition(outcomes);
- 
-/*         if (condition == conditionId) return indexSets;
-        else {
-            uint outcomes = conditionalTokens.getOutcomeSlotCount(condition);
-            
-            return generateBasicPartition(outcomes);
-            //// buscar el maximo
-            //uint fullIndexSet = (1 << outcomeSlotCount) - 1;
-            //// restarle el indice obligado (index)
-            //uint rest = fullIndexSet - index;            
-            //// recrear un array con los indices restantes
-            //indexes =
-            ///// otra forma
-            //bytes32 full = new bytes32(fullIndexSet); 
-            //bytes32 out = new bytes32(index); 
-            //bytes32 rest = full ^ out;
-            // then for each bit == 1 should enter 2**i into an array
-            // the problem is the length.. i should check if index is pure (and length == outcomes)
-            // or mixed (and length < outcomes)
-        } */
-
+    function binaryIndexes(uint256 input) internal view returns (uint256[] memory) {
+        uint256[] memory result = new uint256[](256);
+        uint256 count = 0;
+        for (uint256 i = 0; i <= input; i++) {
+            if ((input & (1 << i)) != 0) {
+                result[count] = i;
+                count++;
+            }
+        }
+        uint256[] memory retornar = new uint[](count);
+        for (uint j = 0; j < count; j++) {
+            retornar[j] = 1 << result[j];   // converted to value
+        }
+        return retornar;
     }
 
-/*      REPLICATE FROM FPMMs
-    - but they only allow markets of "pure" outcomeSlot (conditionsIndexes are in [1,2,4,8,16, etc])
-    - if i wanna keep working with joint outcomes i need to morph this functions to retrieve:
-        given an index and a condition, the minimal indexSets that contains the index needed
-        so:
-        b1111111111         fullIndex
-    -   b0000110000         input
-       ---------------
-        b1111001111 in an array
+    function getIndexes(uint outcomes, uint index) internal view returns (uint[] memory) {
+        uint fullIndexSet = (1 << outcomes) - 1;
+        uint rest = fullIndexSet - index;
+        uint[] memory indexes = binaryIndexes(rest);
+        uint retLength = indexes.length + 1;
+        uint[] memory ret = new uint[](retLength);
+        uint i;
+        for (i = 0; i <= indexes.length; i++) {
+            if(i == indexes.length || indexes[i] > index) {
+                ret[i] = index;
+                break;
+            } 
+            ret[i] = indexes[i];
+        }            
+        for(i = i + 1; i < retLength; i++) {
+            ret[i] = indexes[i - 1];
+        }
+        return ret;
+    }
 
-
- */
-    function generateBasicPartition(uint outcomeSlotCount)
+/*     function generateBasicPartition(uint outcomeSlotCount)
         private
         pure
         returns (uint[] memory partition)
@@ -192,21 +180,9 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
         for(uint i = 0; i < outcomeSlotCount; i++) {
             partition[i] = 1 << i;
         }
-    }
-
-    //function splitPositionThroughAllConditions(uint amount)
-    //    private
-    //{
-    //    for(uint i = conditionIds.length - 1; int(i) >= 0; i--) {
-    //        uint[] memory partition = generateBasicPartition(outcomeSlotCounts[i]);
-    //        for(uint j = 0; j < collectionIds[i].length; j++) {
-    //            conditionalTokens.splitPosition(collateralToken, collectionIds[i][j], conditionIds[i], partition, amount);
-    //        }
-    //    }
-    //}
+    } */
 
     function setProbabilityDistribution(
-        //uint amount,                        // deprecate! and call splitPositions on behalf of caller
         uint[] calldata distribution,
         string calldata justification
     ) public openQuestion {

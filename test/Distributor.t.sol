@@ -16,7 +16,7 @@ import "openzeppelin-contracts/contracts/token/ERC20/presets/ERC20PresetMinterPa
 // simplify process to test ? (user splits or preparation of positions to play)
 // test new types of games
 
-contract DistributorNewTest is Test, ERC1155Holder {
+contract DistributorTest is Test, ERC1155Holder {
 
     address CT_gnosis = 0xCeAfDD6bc0bEF976fdCd1112955828E00543c0Ce; 
     bytes32 rootCollateral = 0x0000000000000000000000000000000000000000000000000000000000000000; 
@@ -101,8 +101,8 @@ contract DistributorNewTest is Test, ERC1155Holder {
         condition2 = opinologos.prepareQuestion(oracle, questionId2, 2, 0);
         vm.prank(oracle);
         opinologos.createQuestion(condition2);
-        sets2[0] = uint(1); //0b001        
-        sets2[1] = uint(2); //0b010       
+        sets2[0] = uint(1); //0b001
+        sets2[1] = uint(2); //0b010
 
         condition3 = opinologos.prepareQuestion(oracle, questionId3, 3, 0);
         vm.prank(oracle);
@@ -608,7 +608,7 @@ contract DistributorNewTest is Test, ERC1155Holder {
         userRedeemsCollateral(carol, rootCollateral, condition, sets1);        
     }
 
-    function test_mixed() public {
+    function test_mixed() public {  // is not mixed!!
         // we will create a mixed conditional for 
         // Q1::A[Q2::Hi, Q2::Lo]
 
@@ -617,17 +617,15 @@ contract DistributorNewTest is Test, ERC1155Holder {
         conditionsIndexes.push(sets1[0]);
         conditionsIndexes.push(0);
 
-        bytes32 collectionA = ICT(CT_gnosis).getCollectionId(
-            rootCollateral, // from collateral
-            condition1,     // Q1
-            sets1[0]        // A
-        );
+        //bytes32 collectionA = ICT(CT_gnosis).getCollectionId(
+        //    rootCollateral, // from collateral
+        //    condition1,     // Q1
+        //    sets1[0]        // A
+        //);
         uint price = 100;
         distributor1 = factory.createDistributor(
-            //rootCollateral,     // root 
-            //condition1,         // condition1
             conditions,
-            conditionsIndexes,           // A
+            conditionsIndexes,           
             address(collateralToken),
             price,
             sets2
@@ -1190,6 +1188,7 @@ contract DistributorNewTest is Test, ERC1155Holder {
         collateralToken.balanceOf(bob);
         collateralToken.balanceOf(carol);
     }
+
 
 /* 
     function test_condition_non_valid() public {

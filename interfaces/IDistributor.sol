@@ -43,4 +43,5 @@ interface IDistributor {
     function getProbabilityDistribution() external view returns (uint[] memory);
     function getUserPosition(address who) external view returns (uint[] memory);
 //    function price() external view returns (uint);
+
 }
