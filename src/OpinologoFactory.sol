@@ -3,13 +3,8 @@ pragma solidity ^0.8.2;
 
 import "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "openzeppelin-contracts/contracts/access/AccessControl.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../interfaces/ICT.sol";
-import "../interfaces/IDistributor.sol"; // careful here.. initialization should be shared amongst all templates
 
-//  TODO
-// conditional distributors could be conditioned by question timelock (only if ends later than parent)
-// fee mechanism (maybe in collateral?)
 
 contract OpinologosFactory is AccessControl {
     bytes32 public constant CREATOR_ROLE = keccak256("CREATOR_ROLE");
@@ -119,8 +114,5 @@ contract OpinologosFactory is AccessControl {
     function getTimeout(bytes32 condition) public view returns(uint) {
         return questions[condition].timeout;
     }
-/*     function getOutcomes(bytes32 condition) public view returns(uint) {
-        return questions[condition].outcomes;
-    } */
 
 }
