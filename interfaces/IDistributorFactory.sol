@@ -12,8 +12,5 @@ interface IDistributorFactory {
     ) external returns (address);
     function hasRole(bytes32 role, address account) external view returns(bool);
 
-//    function getDistributorAddress(uint index) external view returns(address);
-//    function getCondition(uint index) external view returns(bytes32);
-//    function getParentCollection(uint index) external view returns(bytes32);
     function fee() external view returns(uint);
 }

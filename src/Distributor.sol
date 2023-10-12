@@ -86,6 +86,7 @@ contract Distributor is Initializable, ERC1155Holder, ReentrancyGuard {
             );
         }
 
+    // porque no emitir conditions & conditionsIndexes?
         emit DistributorInitialized(
             _collateral,
             conditionId,

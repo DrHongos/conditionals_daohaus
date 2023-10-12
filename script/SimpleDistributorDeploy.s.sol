@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.2;
 
-import "forge-std/Script.sol";
+import "../lib/forge-std/src/Script.sol";
 import "../src/Distributor.sol";
 import "../src/DistributorFactory.sol";
 import "../src/OpinologoFactory.sol";
@@ -17,7 +17,7 @@ contract SystemDeployment is Script {
         DistributorFactory distributorFactory = new DistributorFactory(CT_GNOSIS, address(opinologos));
         distributorFactory.setTemplate(address(distributor));
 
-//        OpinologosFactory(currentFactory).grantRole(CREATOR_ROLE, 0x816a4B059883692F3852E82f343b96B5903b9F03);
+        //opinologos.grantRole(CREATOR_ROLE, 0x816a4B059883692F3852E82f343b96B5903b9F03);
         vm.stopBroadcast();
     }
 }
